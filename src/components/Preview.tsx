@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   SandpackCodeEditor,
   SandpackFileExplorer,
@@ -52,6 +52,25 @@ function ErrorCard({ onFix, busy }: { onFix: (message: string) => void; busy: bo
 
 export function Sandbox({ files, view, device, busy, onFix }: { files: FileMap; view: View; device: Device; busy: boolean; onFix: (message: string) => void }) {
   const theme = useTheme();
+
+  // SandpackProvider reads `files` only when it mounts, and in-place updates proved unreliable, so
+  // the preview is restarted with the new files shortly after they settle. The short delay lets a
+  // burst of tool calls collapse into one refresh.
+  const [shown, setShown] = useState(files);
+  const [version, setVersion] = useState(0);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setShown(files);
+      setVersion((v) => v + 1);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [files]);
+
   const customSetup = useMemo(() => ({ dependencies: SANDBOX_DEPENDENCIES }), []);
   const options = useMemo(
     () => ({ externalResources: [TAILWIND_CDN], recompileMode: "delayed" as const, recompileDelay: 350, initMode: "immediate" as const }),
@@ -59,7 +78,7 @@ export function Sandbox({ files, view, device, busy, onFix }: { files: FileMap; 
   );
 
   return (
-    <SandpackProvider template="react-ts" theme={theme} files={files} customSetup={customSetup} options={options} style={{ height: "100%" }}>
+    <SandpackProvider key={version} template="react-ts" theme={theme} files={shown} customSetup={customSetup} options={options} style={{ height: "100%" }}>
       {/* One provider for both views keeps the preview running while you look at the code. */}
       <div className={cn("relative h-full", view !== "preview" && "hidden")}>
         <div className="flex h-full items-stretch justify-center overflow-auto bg-bg-soft p-0 sm:p-4">

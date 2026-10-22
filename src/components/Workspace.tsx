@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
@@ -37,11 +38,15 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("build");
   const modeRef = useRef(mode);
-  modeRef.current = mode;
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
   const [view, setView] = useState<View>("preview");
   const [device, setDevice] = useState<Device>("desktop");
   const [name, setName] = useState(initialName);
 
+  // The body is read when a request is sent, never during render, so the ref is safe here.
+  // eslint-disable-next-line react-hooks/refs
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/chat", body: () => ({ mode: modeRef.current }) }), []);
   const { messages, sendMessage, status, stop, setMessages, error } = useChat({ id, messages: initialMessages, transport });
   const busy = status === "submitted" || status === "streaming";
@@ -56,8 +61,13 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
   // Start from the prompt typed on the home page, exactly once.
   useEffect(() => {
     if (initialMessages.length > 0) return;
-    const prompt = takePendingPrompt(id);
-    if (prompt) sendMessage({ text: prompt });
+    // Wait a tick: React's dev-mode mount/unmount/mount would otherwise reset the chat right after
+    // the first send. The cleanup cancels the first schedule, so only the settled mount sends.
+    const timer = window.setTimeout(() => {
+      const prompt = takePendingPrompt(id);
+      if (prompt) sendMessage({ text: prompt });
+    }, 50);
+    return () => window.clearTimeout(timer);
   }, [id, initialMessages.length, sendMessage]);
 
   // Name the project after the first request, unless the user already renamed it.
@@ -67,6 +77,7 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
     const text = (first?.parts as { type: string; text?: string }[] | undefined)?.find((p) => p.type === "text")?.text?.trim();
     if (text) {
       const title = text.length > 42 ? `${text.slice(0, 42).trim()}…` : text;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- derived once from the first message
       setName(title);
       updateProject(id, { name: title });
     }
@@ -158,6 +169,7 @@ function Loader({ id }: { id: string | undefined }) {
   useEffect(() => {
     if (!id) return;
     const project = getProject(id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage only exists in the browser
     setState(project ? { messages: loadMessages(id), name: project.name } : "missing");
   }, [id]);
 
@@ -174,9 +186,9 @@ function Loader({ id }: { id: string | undefined }) {
         <div className="space-y-3">
           <p className="text-[15px] font-medium">Fant ikke prosjektet</p>
           <p className="text-[13px] text-muted">Prosjektene ligger i denne nettleseren.</p>
-          <a href="/" className="bg-brand inline-block rounded-xl px-4 py-2 text-[13px] font-medium text-white">
+          <Link href="/" className="bg-brand inline-block rounded-xl px-4 py-2 text-[13px] font-medium text-white">
             Til forsiden
-          </a>
+          </Link>
         </div>
       </div>
     );

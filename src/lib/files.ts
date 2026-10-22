@@ -34,10 +34,9 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-se
 
 /** Packages the generated app may import. Keep in sync with the system prompt. */
 export const SANDBOX_DEPENDENCIES: Record<string, string> = {
-  "lucide-react": "latest",
-  "framer-motion": "latest",
-  clsx: "latest",
-  recharts: "latest",
+  "lucide-react": "0.468.0",
+  "framer-motion": "11.15.0",
+  clsx: "2.1.1",
 };
 
 export const TAILWIND_CDN = "https://cdn.tailwindcss.com";

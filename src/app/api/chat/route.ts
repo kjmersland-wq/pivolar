@@ -35,6 +35,7 @@ PROSJEKTET
 - Det er en React + TypeScript-app som kjører i en nettleser-sandbox (Sandpack). Inngangen er /index.tsx, som importerer ./App og ./styles.css. Ikke endre /index.tsx uten god grunn.
 - Styling er Tailwind CSS (via CDN, alle vanlige klasser virker). Bruk /styles.css bare til det Tailwind ikke dekker.
 - Tillatte pakker: react, react-dom, ${Object.keys(SANDBOX_DEPENDENCIES).join(", ")}. Ikke importer noe annet.
+- Grafer og diagrammer: tegn dem selv med SVG eller div-er (det finnes ingen diagrambibliotek).
 - Ingen backend, ingen filsystem og ingen miljøvariabler. Lagre data i komponenttilstand eller localStorage.
 - Bilder: bruk gradienter, SVG eller ikoner fra lucide-react. Ikke finn på bildeadresser.
 
