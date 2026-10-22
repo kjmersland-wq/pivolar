@@ -1,3 +1,4 @@
+import { anthropic } from "@ai-sdk/anthropic";
 import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
 import { SANDBOX_DEPENDENCIES, applyTool, deriveFiles, type FileMap } from "@/lib/files";
@@ -10,13 +11,18 @@ function friendlyError(error: unknown): string {
   if (/credit card|customer_verification_required/i.test(text)) {
     return "AI Gateway trenger et betalingskort på Vercel-kontoen din for å låse opp de gratis kredittene. Legg det inn under AI på vercel.com, og prøv igjen.";
   }
+  if (/credit balance|billing/i.test(text)) return "Anthropic-kontoen mangler kreditt. Fyll på under Plans & Billing hos Anthropic.";
+  if (/invalid x-api-key|authentication_error|api key/i.test(text)) return "Nøkkelen ble ikke godtatt. Sjekk ANTHROPIC_API_KEY (eller AI_GATEWAY_API_KEY) i .env.local.";
   if (/rate.?limit|429/i.test(text)) return "For mange forespørsler akkurat nå. Vent litt og prøv igjen.";
   if (/budget|insufficient|credits/i.test(text)) return "AI-kredittene er brukt opp. Fyll på under AI på vercel.com.";
   if (/auth|token|unauthor|401|oidc/i.test(text)) return "Fikk ikke tilgang til AI Gateway. Kjør «vercel env pull» på nytt, eller sett AI_GATEWAY_API_KEY.";
   return "Noe gikk galt hos AI-leverandøren. Prøv igjen om litt.";
 }
 
-const MODEL = process.env.AI_GATEWAY_MODEL ?? "anthropic/claude-sonnet-5.5";
+// With ANTHROPIC_API_KEY the app talks to Claude directly; otherwise it goes through Vercel AI Gateway.
+const MODEL = process.env.ANTHROPIC_API_KEY
+  ? anthropic(process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5")
+  : (process.env.AI_GATEWAY_MODEL ?? "anthropic/claude-sonnet-5.5");
 
 function systemPrompt(files: FileMap, mode: "build" | "chat") {
   const listing = Object.entries(files)
