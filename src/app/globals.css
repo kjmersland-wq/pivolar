@@ -1,26 +1,160 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Atelier design tokens. Dark is the default; [data-theme="light"] swaps the palette. */
+:root,
+[data-theme="dark"] {
+  --bg: #09090b;
+  --bg-soft: #0e0e12;
+  --surface: #131318;
+  --surface-2: #1a1a21;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --fg: #f4f4f5;
+  --muted: #9a9aa6;
+  --faint: #6b6b78;
+  --accent: #f43f5e;
+  --accent-2: #f59e0b;
+  --accent-3: #8b5cf6;
+  --glow: rgba(244, 63, 94, 0.18);
+  --glow-2: rgba(139, 92, 246, 0.16);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 20px 60px -20px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: #fafaf9;
+  --bg-soft: #f4f4f2;
+  --surface: #ffffff;
+  --surface-2: #f6f6f4;
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.16);
+  --fg: #18181b;
+  --muted: #6b6b76;
+  --faint: #9a9aa6;
+  --glow: rgba(244, 63, 94, 0.12);
+  --glow-2: rgba(139, 92, 246, 0.1);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 20px 50px -24px rgba(24, 24, 27, 0.25);
+  color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--bg);
+  --color-bg-soft: var(--bg-soft);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* The signature gradient used on logo, primary buttons and highlights. */
+.bg-brand {
+  background-image: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 50%, var(--accent-3) 100%);
+}
+.text-brand {
+  background-image: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 50%, var(--accent-3) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Ambient glow behind hero sections. */
+.ambient {
+  background:
+    radial-gradient(60rem 30rem at 20% -10%, var(--glow), transparent 60%),
+    radial-gradient(50rem 28rem at 90% 0%, var(--glow-2), transparent 60%);
+}
+
+.glass {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--line);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+/* Thin, quiet scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--fg) 10%, transparent) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer,
+  .pulse-dot {
+    animation: none;
+  }
+}
+
+/* Make the Sandpack preview fill whatever space the workspace gives it. */
+.sp-wrapper,
+.sp-layout,
+.sp-stack,
+.sp-preview,
+.sp-preview-container {
+  height: 100% !important;
+}
+.sp-preview-iframe {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+.sp-layout {
+  border: 0 !important;
+  border-radius: 0 !important;
 }

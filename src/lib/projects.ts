@@ -1,0 +1,121 @@
+"use client";
+
+import { useSyncExternalStore } from "react";
+import type { UIMessage } from "ai";
+import { uid } from "@/lib/utils";
+
+/** Phase 1 keeps projects in this browser. The shape is ready to move to a database later. */
+export type ProjectMeta = { id: string; name: string; createdAt: number; updatedAt: number };
+
+const LIST_KEY = "atelier:projects:v1";
+const EVENT = "atelier:projects-changed";
+const msgKey = (id: string) => `atelier:msgs:${id}`;
+
+function read<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function write(key: string, value: unknown) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage full or unavailable: the session still works, it just will not persist */
+  }
+}
+
+let cachedRaw: string | null = null;
+let cachedList: ProjectMeta[] = [];
+
+function snapshot(): ProjectMeta[] {
+  const raw = window.localStorage.getItem(LIST_KEY);
+  if (raw !== cachedRaw) {
+    cachedRaw = raw;
+    try {
+      cachedList = raw ? (JSON.parse(raw) as ProjectMeta[]) : [];
+    } catch {
+      cachedList = [];
+    }
+  }
+  return cachedList;
+}
+
+function subscribe(callback: () => void) {
+  window.addEventListener(EVENT, callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener(EVENT, callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+const EMPTY: ProjectMeta[] = [];
+
+/** All projects, newest first. Returns an empty list on the server. */
+export function useProjects(): ProjectMeta[] {
+  const list = useSyncExternalStore(subscribe, snapshot, () => EMPTY);
+  return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+function saveList(list: ProjectMeta[]) {
+  write(LIST_KEY, list);
+  window.dispatchEvent(new Event(EVENT));
+}
+
+export function createProject(name = "Nytt prosjekt"): ProjectMeta {
+  const project: ProjectMeta = { id: uid("p"), name, createdAt: Date.now(), updatedAt: Date.now() };
+  saveList([project, ...read<ProjectMeta[]>(LIST_KEY, [])]);
+  return project;
+}
+
+export function getProject(id: string): ProjectMeta | undefined {
+  return read<ProjectMeta[]>(LIST_KEY, []).find((p) => p.id === id);
+}
+
+export function updateProject(id: string, patch: Partial<Pick<ProjectMeta, "name">>) {
+  saveList(read<ProjectMeta[]>(LIST_KEY, []).map((p) => (p.id === id ? { ...p, ...patch, updatedAt: Date.now() } : p)));
+}
+
+export function deleteProject(id: string) {
+  saveList(read<ProjectMeta[]>(LIST_KEY, []).filter((p) => p.id !== id));
+  try {
+    window.localStorage.removeItem(msgKey(id));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** The prompt typed on the home page waits here until the new project's chat has taken it. */
+export function setPendingPrompt(id: string, text: string) {
+  try {
+    window.sessionStorage.setItem(`atelier:pending:${id}`, text);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Returns the waiting prompt once and removes it, so it can never be sent twice. */
+export function takePendingPrompt(id: string): string | null {
+  try {
+    const key = `atelier:pending:${id}`;
+    const text = window.sessionStorage.getItem(key);
+    if (text !== null) window.sessionStorage.removeItem(key);
+    return text;
+  } catch {
+    return null;
+  }
+}
+
+export function loadMessages(id: string): UIMessage[] {
+  return read<UIMessage[]>(msgKey(id), []);
+}
+
+export function saveMessages(id: string, messages: UIMessage[]) {
+  write(msgKey(id), messages);
+  const list = read<ProjectMeta[]>(LIST_KEY, []);
+  if (list.some((p) => p.id === id)) saveList(list.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p)));
+}

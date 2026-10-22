@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Atelier
 
-## Getting Started
+Et privat verktøy for å bygge apper ved å snakke: du beskriver det du vil ha, AI-en skriver React/Tailwind-koden, og du ser resultatet live ved siden av samtalen.
 
-First, run the development server:
+## Slik fungerer det
 
-```bash
+- **Chat → kode:** Claude (via Vercel AI Gateway) bruker tre verktøy: `writeFile`, `editFile` og `deleteFile`.
+- **Prosjektet bygges av samtalen.** Filene regnes ut fra malen pluss alle ferdige verktøykall i chatten (`src/lib/files.ts`). Det gir «Gå tilbake hit» gratis: å kutte historikken kutter også filene.
+- **Forhåndsvisning:** Sandpack (React + TypeScript + Tailwind) kjører direkte i nettleseren, uten egen server.
+- **Innlogging:** ett passord og en signert cookie, bare for deg (`src/proxy.ts`).
+- **Lagring:** prosjekter og samtaler ligger i nettleseren (localStorage) i denne første etappen.
+
+## Kjør lokalt
+
+```sh
+npm install
+vercel link          # kobler til Vercel-prosjektet og gir AI Gateway-tilgang
+vercel env pull      # henter VERCEL_OIDC_TOKEN (gyldig i 12 timer)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Legg `APP_PASSWORD` og `APP_SECRET` i `.env.local` (se `.env.example`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## AI Gateway
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gratis kredittene (Vercel → AI). Uten kort får du meldingen «AI Gateway trenger et betalingskort». Modellen kan byttes med `AI_GATEWAY_MODEL` (standard `anthropic/claude-sonnet-5.5`).
 
-## Learn More
+## Miljøvariabler
 
-To learn more about Next.js, take a look at the following resources:
+| Variabel | Hva |
+|---|---|
+| `APP_PASSWORD` | Passordet du skriver på innloggingssiden |
+| `APP_SECRET` | Tilfeldig streng (32+ tegn) som signerer innloggingen |
+| `AI_GATEWAY_MODEL` | Valgfri modell, `provider/modell` |
+| `AI_GATEWAY_API_KEY` | Bare utenfor Vercel; på Vercel brukes OIDC automatisk |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Etapper
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Fundament** (ferdig): utseende, chat, kodeskriving, live forhåndsvisning, kodevisning, enhetsvisning, «prøv å fikse», historikk, innlogging.
+2. Redigerbar kode, bildeopplasting i chatten, klikk-og-endre i forhåndsvisningen.
+3. Database for prosjekter (flere enheter) og versjonsliste.
+4. Publisering: GitHub-repo og Vercel-deploy med ett klikk, og Supabase/Neon koblet på automatisk.
