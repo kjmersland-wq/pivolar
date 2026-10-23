@@ -32,7 +32,7 @@ Chat building, Sandpack preview, inspector, direct edit panel, compose dialog, p
 | Phase | Needs | Status |
 | --- | --- | --- |
 | 0 Audit | none | done (this document) |
-| 1 Accounts, server-side projects, dashboard | A database and an auth service (decision needed: for example Neon + Auth.js/Clerk, or Supabase) | **blocked on provider choice**; the single-user dashboard is extended in phase 2 |
+| 1 Accounts, server-side projects, dashboard | **Supabase** (database, auth and storage in one). Chosen 2026-10-23 as the cheapest: one vendor and one bill, 50,000 monthly users included in the free plan, Pro from about USD 25 a month for everything. Neon + Clerk would be two vendors and two bills. Free projects pause after a week without use, and the free plan allows two projects | **blocked on a Supabase project and its keys** (see below) |
 | 2 ZIP import, analysis, full export | none | **implemented now** |
 | 3 GitHub import, branches, diffs | A GitHub App (client id, private key, webhook secret) created by the owner | next |
 | 4 AI editing on imported code, isolated builds, tests, rollback | Sandbox runtime | after 3 |
@@ -52,3 +52,10 @@ Order change: phase 2 was done before phase 1, because it needs no new infrastru
 - **Analysis**: framework, package manager, scripts, services (database, auth, payments), environment variables, risks, and whether the preview can run it.
 - **Export** (`/api/export`): a ZIP with the project files, a generated `.env.example`, `README`, `PIVOLAR-MANIFEST.json` (included, omitted, manual steps) and `EXPORT-REPORT.md`. Secrets are never included: matching files are omitted and matching values redacted. Two modes: the files as they are, or a ready Vite project (for apps generated in Pivolar).
 - **Limits (stated, not hidden):** binary assets are not stored in Pivolar yet, so images in an imported project are listed in the manifest as needing to be copied back by hand. Total stored text is capped at about 3 MB until projects move to a database (phase 1).
+
+## 4. Phase 1 prerequisites (Supabase)
+
+1. A new Supabase project for Pivolar (free plan allows two; the unused `volumcalc-db` can be paused or deleted to free one).
+2. Environment variables in `.env.local` and in Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (public by design) and `SUPABASE_SERVICE_ROLE_KEY` (server only, never in browser code).
+3. Plan: tables `projects`, `project_files`, `audit_log`, `usage`, each with row-level security so a user can only read and write rows where `owner_id = auth.uid()`. The server checks ownership again on every request. Existing single-user projects are moved from browser storage by an explicit "Flytt til konto" step, never silently.
+4. Before the public launch: replace the single-owner password with Supabase Auth (email and password, magic link), and turn on rate limits.
