@@ -2,11 +2,37 @@
 
 import { useSyncExternalStore } from "react";
 import type { UIMessage } from "ai";
-import { uid } from "@/lib/utils";
 import type { UserEdit } from "@/lib/files";
 
-/** Phase 1 keeps projects in this browser. The shape is ready to move to a database later. */
-export type ProjectMeta = { id: string; name: string; createdAt: number; updatedAt: number; framework?: string };
+/**
+ * Projects are worked on in this browser (fast, works offline) and mirrored to the account in the
+ * background by `sync.ts`. `rev` counts local changes, `syncedRev` is the revision last sent and
+ * `remoteAt` is the server's timestamp from that send, so neither side depends on clocks agreeing.
+ */
+export type ProjectMeta = {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  framework?: string;
+  rev?: number;
+  syncedRev?: number;
+  remoteAt?: number;
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Projects with a UUID id can live on the account. Older ones (`p_…`) are moved by an explicit step. */
+export const isAccountId = (id: string) => UUID.test(id);
+
+type ChangeKind = "save" | "delete";
+const listeners = new Set<(id: string, kind: ChangeKind) => void>();
+export function subscribeChanges(listener: (id: string, kind: ChangeKind) => void) {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+function emit(id: string, kind: ChangeKind) {
+  for (const listener of listeners) listener(id, kind);
+}
 
 const LIST_KEY = "atelier:projects:v1";
 const EVENT = "atelier:projects-changed";
@@ -70,9 +96,18 @@ function saveList(list: ProjectMeta[]) {
   window.dispatchEvent(new Event(EVENT));
 }
 
+/** Marks a project as changed locally, so the sync layer knows there is something to send. */
+function bump(id: string, patch: Partial<ProjectMeta> = {}) {
+  const list = read<ProjectMeta[]>(LIST_KEY, []);
+  if (!list.some((p) => p.id === id)) return;
+  saveList(list.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: Date.now(), rev: (p.rev ?? 0) + 1 } : p)));
+  emit(id, "save");
+}
+
 export function createProject(name = "Nytt prosjekt"): ProjectMeta {
-  const project: ProjectMeta = { id: uid("p"), name, createdAt: Date.now(), updatedAt: Date.now() };
+  const project: ProjectMeta = { id: crypto.randomUUID(), name, createdAt: Date.now(), updatedAt: Date.now(), rev: 1 };
   saveList([project, ...read<ProjectMeta[]>(LIST_KEY, [])]);
+  emit(project.id, "save");
   return project;
 }
 
@@ -81,10 +116,16 @@ export function getProject(id: string): ProjectMeta | undefined {
 }
 
 export function updateProject(id: string, patch: Partial<Pick<ProjectMeta, "name">>) {
-  saveList(read<ProjectMeta[]>(LIST_KEY, []).map((p) => (p.id === id ? { ...p, ...patch, updatedAt: Date.now() } : p)));
+  bump(id, patch);
 }
 
 export function deleteProject(id: string) {
+  removeLocal(id);
+  emit(id, "delete");
+}
+
+/** Removes a project from this browser only. Deleting from the account is `sync.ts`'s job. */
+export function removeLocal(id: string) {
   saveList(read<ProjectMeta[]>(LIST_KEY, []).filter((p) => p.id !== id));
   try {
     window.localStorage.removeItem(msgKey(id));
@@ -143,6 +184,7 @@ export function loadPublish(id: string): PublishInfo | null {
 
 export function savePublish(id: string, info: PublishInfo) {
   write(publishKey(id), info);
+  bump(id);
 }
 
 export function loadEdits(id: string): UserEdit[] {
@@ -151,12 +193,12 @@ export function loadEdits(id: string): UserEdit[] {
 
 export function saveEdits(id: string, edits: UserEdit[]) {
   write(editsKey(id), edits);
+  bump(id);
 }
 
 export function saveMessages(id: string, messages: UIMessage[]) {
   write(msgKey(id), withoutImageData(messages));
-  const list = read<ProjectMeta[]>(LIST_KEY, []);
-  if (list.some((p) => p.id === id)) saveList(list.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p)));
+  bump(id);
 }
 
 /** What is known about a project that came from outside, kept for the export manifest. */
@@ -171,7 +213,7 @@ export function loadImportInfo(id: string): ImportInfo | null {
  * browser storage is small and a half-saved import would silently lose files.
  */
 export function importProject(name: string, files: Record<string, string>, info: ImportInfo, framework: string): { ok: true; project: ProjectMeta } | { ok: false; error: string } {
-  const project: ProjectMeta = { id: uid("p"), name, createdAt: Date.now(), updatedAt: Date.now(), framework };
+  const project: ProjectMeta = { id: crypto.randomUUID(), name, createdAt: Date.now(), updatedAt: Date.now(), framework, rev: 1 };
   const edits: UserEdit[] = Object.entries(files).map(([path, content]) => ({ at: 0, path, content }));
   try {
     window.localStorage.setItem(editsKey(project.id), JSON.stringify(edits));
@@ -186,5 +228,53 @@ export function importProject(name: string, files: Record<string, string>, info:
     return { ok: false, error: "Nettleserlagringen er full. Slett et gammelt prosjekt og prøv igjen." };
   }
   saveList([project, ...read<ProjectMeta[]>(LIST_KEY, [])]);
+  emit(project.id, "save");
   return { ok: true, project };
+}
+
+/** Everything a project consists of, as it is sent to the account. */
+export type ProjectState = { messages: UIMessage[]; edits: UserEdit[]; publish: PublishInfo | null; importInfo: ImportInfo | null };
+
+export function listLocal(): ProjectMeta[] {
+  return read<ProjectMeta[]>(LIST_KEY, []);
+}
+
+export function readState(id: string): ProjectState {
+  return {
+    messages: read<UIMessage[]>(msgKey(id), []),
+    edits: read<UserEdit[]>(editsKey(id), []),
+    publish: read<PublishInfo | null>(publishKey(id), null),
+    importInfo: read<ImportInfo | null>(importKey(id), null),
+  };
+}
+
+/** Stores a project fetched from the account. Does not count as a local change. */
+export function applyRemote(meta: ProjectMeta, state: ProjectState) {
+  write(msgKey(meta.id), state.messages);
+  write(editsKey(meta.id), state.edits);
+  if (state.publish) write(publishKey(meta.id), state.publish);
+  if (state.importInfo) write(importKey(meta.id), state.importInfo);
+  const rest = listLocal().filter((p) => p.id !== meta.id);
+  saveList([meta, ...rest]);
+}
+
+/** Records that `rev` reached the account. Does not count as a local change. */
+export function markSynced(id: string, syncedRev: number, remoteAt: number) {
+  saveList(listLocal().map((p) => (p.id === id ? { ...p, syncedRev, remoteAt } : p)));
+}
+
+/** Gives an older project (`p_…` id) a UUID so it can live on the account. Returns the new id. */
+export function renameLocal(oldId: string, newId: string) {
+  const state = readState(oldId);
+  write(msgKey(newId), state.messages);
+  write(editsKey(newId), state.edits);
+  if (state.publish) write(publishKey(newId), state.publish);
+  if (state.importInfo) write(importKey(newId), state.importInfo);
+  const list = listLocal().map((p) => (p.id === oldId ? { ...p, id: newId } : p));
+  saveList(list);
+  try {
+    for (const key of [msgKey(oldId), editsKey(oldId), publishKey(oldId), importKey(oldId)]) window.localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
 }

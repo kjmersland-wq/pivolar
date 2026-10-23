@@ -1,8 +1,45 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
-import { deleteProject, useProjects } from "@/lib/projects";
+import { CloudUpload, Loader2, Trash2 } from "lucide-react";
+import { deleteProject, isAccountId, useProjects } from "@/lib/projects";
+import { migrateLegacy, type MigrateResult } from "@/lib/sync";
+
+/** Older projects only exist in this browser. Moving them to the account is always the user's own step. */
+function MoveToAccount({ count }: { count: number }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<MigrateResult | null>(null);
+  async function run() {
+    setBusy(true);
+    setResult(await migrateLegacy());
+    setBusy(false);
+  }
+  return (
+    <div className="card mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4">
+      <div className="min-w-0 text-[13.5px]">
+        <p className="font-medium">
+          {count === 1 ? "1 prosjekt ligger bare i denne nettleseren" : `${count} prosjekter ligger bare i denne nettleseren`}
+        </p>
+        <p className="mt-0.5 text-muted">Flytt dem til kontoen din, så er de trygge og kan åpnes fra alle enheter.</p>
+        {result?.failed.map((f) => (
+          <p key={f.name} className="mt-1 text-red-400">
+            «{f.name}»: {f.reason}
+          </p>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="bg-brand flex items-center gap-2 rounded-xl px-4 py-2 text-[13.5px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-60"
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : <CloudUpload className="size-4" />}
+        Flytt til konto
+      </button>
+    </div>
+  );
+}
 
 function ago(time: number) {
   const minutes = Math.round((Date.now() - time) / 60000);
@@ -23,8 +60,10 @@ const TINTS = [
 export function ProjectGrid() {
   const projects = useProjects();
   if (projects.length === 0) return null;
+  const legacy = projects.filter((p) => !isAccountId(p.id)).length;
   return (
     <section className="mx-auto mt-20 w-full max-w-5xl px-4 pb-24">
+      {legacy > 0 && <MoveToAccount count={legacy} />}
       <h2 className="mb-4 text-[13px] font-medium uppercase tracking-wider text-faint">Dine prosjekter</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {projects.map((project, index) => (

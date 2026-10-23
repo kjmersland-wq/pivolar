@@ -15,6 +15,7 @@ import { Sandbox, type Device, type PickedElement, type View } from "@/component
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { deriveFiles, type UserEdit } from "@/lib/files";
 import { getProject, loadEdits, loadMessages, saveEdits, saveMessages, takePendingPrompt, updateProject } from "@/lib/projects";
+import { pullOne } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 
 function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (value: T) => void; options: { value: T; label?: string; icon: typeof Eye }[] }) {
@@ -262,9 +263,17 @@ function Loader({ id }: { id: string | undefined }) {
   const [state, setState] = useState<{ messages: UIMessage[]; edits: UserEdit[]; name: string } | "missing" | null>(null);
   useEffect(() => {
     if (!id) return;
-    const project = getProject(id);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage only exists in the browser
-    setState(project ? { messages: loadMessages(id), edits: loadEdits(id), name: project.name } : "missing");
+    let cancelled = false;
+    void (async () => {
+      // A project made on another device is not in this browser yet; fetch it from the account first.
+      if (!getProject(id)) await pullOne(id);
+      if (cancelled) return;
+      const project = getProject(id);
+      setState(project ? { messages: loadMessages(id), edits: loadEdits(id), name: project.name } : "missing");
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   if (!id || state === null) {
@@ -279,7 +288,7 @@ function Loader({ id }: { id: string | undefined }) {
       <div className="grid h-dvh place-items-center text-center">
         <div className="space-y-3">
           <p className="text-[15px] font-medium">Fant ikke prosjektet</p>
-          <p className="text-[13px] text-muted">Prosjektene ligger i denne nettleseren.</p>
+          <p className="text-[13px] text-muted">Det finnes ikke i denne nettleseren eller på kontoen din.</p>
           <Link href="/" className="bg-brand inline-block rounded-xl px-4 py-2 text-[13px] font-medium text-white">
             Til forsiden
           </Link>

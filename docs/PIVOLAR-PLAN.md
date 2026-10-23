@@ -32,7 +32,7 @@ Chat building, Sandpack preview, inspector, direct edit panel, compose dialog, p
 | Phase | Needs | Status |
 | --- | --- | --- |
 | 0 Audit | none | done (this document) |
-| 1 Accounts, server-side projects, dashboard | **Supabase** (database, auth and storage in one). Chosen 2026-10-23 as the cheapest: one vendor and one bill, 50,000 monthly users included in the free plan, Pro from about USD 25 a month for everything. Neon + Clerk would be two vendors and two bills. Free projects pause after a week without use, and the free plan allows two projects | **blocked on a Supabase project and its keys** (see below) |
+| 1 Accounts, server-side projects, dashboard | **Supabase** (database, auth and storage in one). Chosen 2026-10-23 as the cheapest: one vendor and one bill, 50,000 monthly users included in the free plan, Pro from about USD 25 a month for everything. Neon + Clerk would be two vendors and two bills. Free projects pause after a week without use, and the free plan allows two projects | **implemented 2026-10-23**: Supabase project `pivolar`, migration applied, owner login through Supabase Auth, projects mirrored to the account (see section 5). Still open: public sign-up (off), per-user quotas, audit log writes |
 | 2 ZIP import, analysis, full export | none | **implemented now** |
 | 3 GitHub import, branches, diffs | A GitHub App (client id, private key, webhook secret) created by the owner | next |
 | 4 AI editing on imported code, isolated builds, tests, rollback | Sandbox runtime | after 3 |
@@ -59,3 +59,13 @@ Order change: phase 2 was done before phase 1, because it needs no new infrastru
 2. Environment variables in `.env.local` and in Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (public by design) and `SUPABASE_SERVICE_ROLE_KEY` (server only, never in browser code).
 3. Plan: tables `projects`, `project_files`, `audit_log`, `usage`, each with row-level security so a user can only read and write rows where `owner_id = auth.uid()`. The server checks ownership again on every request. Existing single-user projects are moved from browser storage by an explicit "Flytt til konto" step, never silently.
 4. Before the public launch: replace the single-owner password with Supabase Auth (email and password, magic link), and turn on rate limits.
+
+## 5. Phase 1 as built
+
+- **Login:** Supabase Auth (email and password). `src/proxy.ts` accepts a session only for addresses in `APP_EMAIL`, so the app stays private even though Supabase sign-ups are also switched off.
+- **Storage model:** the browser's `localStorage` stays the fast working copy and the app code is unchanged. `src/lib/sync.ts` mirrors it to the account through `/api/sync` (row-level security, session client, no service role in the request path).
+  - A local change bumps `rev`; it is sent after 1.5 s. `syncedRev` and `remoteAt` (the server's timestamp) are stored per project, so neither side depends on clocks agreeing.
+  - On start and on window focus the browser pulls projects it does not have, or whose account copy changed while it has no unsent changes. If both sides changed, the local change wins and is sent.
+  - Deletes go to a pending list first, so a failed delete cannot bring the project back on the next pull.
+- **Moving old projects:** projects with a `p_` id are moved only when the user presses "Flytt til konto" on the home page. Each is uploaded first and renamed locally only after the account has it.
+- **Limits:** one request carries a whole project and must stay under 4 MB (Vercel's body limit); larger ones are refused with a clear message. Pictures in chats are still not stored. Two devices editing the same project at the same moment resolve as last writer wins.
