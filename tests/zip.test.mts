@@ -69,7 +69,7 @@ assert.ok(report.risks.some((r) => r.includes("postinstall")));
 assert.equal(report.previewable, false);
 assert.equal(analyze({ "/App.tsx": "x" }).previewable, true);
 assert.match(analyze({ "/package.json": JSON.stringify({ dependencies: { react: "18", vite: "5" } }), "/src/App.tsx": "x" }).previewNote, /forenklet forhåndsvisning/);
-assert.match(analyze({ "/package.json": JSON.stringify({ dependencies: { "@tanstack/react-start": "1", react: "19", vite: "7" } }), "/src/App.tsx": "x" }).previewNote, /ikke vises/);
+assert.match(analyze({ "/package.json": JSON.stringify({ dependencies: { "@tanstack/react-start": "1", react: "19", vite: "7" }, scripts: { dev: "vite dev" } }), "/src/App.tsx": "x" }).previewNote, /isolert, midlertidig miljø/);
 assert.equal(analyze({ "/wp-config.php": "<?php" }).framework.id, "wordpress");
 assert.equal(analyze({ "/index.html": "<p>" }).framework.id, "static");
 

@@ -131,11 +131,13 @@ type SandboxProps = {
   onEdit: (path: string, content: string) => void;
   onElement: (picked: PickedElement, request: string) => void;
   onInspectDone: () => void;
+  /** Shown instead of the in-browser preview when the project needs to be run for real. */
+  runner?: React.ReactNode;
   /** Filled in with a function that measures the layout inside the preview. */
   measureRef?: MutableRefObject<(() => Promise<Spec>) | null>;
 };
 
-export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFix, onEdit, onElement, onInspectDone, measureRef }: SandboxProps) {
+export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFix, onEdit, onElement, onInspectDone, measureRef, runner }: SandboxProps) {
   const theme = useTheme();
   const frame = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
@@ -270,14 +272,7 @@ export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFi
             </SandpackLayout>
           </motion.div>
         </div>
-        {!previewable && (
-          <div className="absolute inset-0 z-10 grid place-items-center bg-bg-soft p-8 text-center">
-            <div className="max-w-sm space-y-2">
-              <p className="text-[15px] font-medium">Forhåndsvisning støttes ikke for dette prosjektet ennå</p>
-              <p className="text-[13px] leading-relaxed text-muted">Det er importert utenfra og må kjøres i et isolert miljø for å vises. Bytt til «Kode» for å lese og redigere filene, eller til «Eksporter» for å laste dem ned.</p>
-            </div>
-          </div>
-        )}
+        {!previewable && (runner ?? null)}
         {picked ? (
           <ElementPanel
             key={pickId}
@@ -293,7 +288,7 @@ export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFi
             }}
           />
         ) : (
-          <ErrorCard onFix={onFix} busy={busy} />
+          previewable && <ErrorCard onFix={onFix} busy={busy} />
         )}
       </div>
 

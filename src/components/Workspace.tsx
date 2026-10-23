@@ -10,6 +10,7 @@ import { BudgetDialog } from "@/components/BudgetDialog";
 import { CheckDialog } from "@/components/CheckDialog";
 import { LoopDialog } from "@/components/LoopDialog";
 import { PullRequestDialog } from "@/components/PullRequestDialog";
+import { RunnerPreview } from "@/components/RunnerPreview";
 import { CompareDialog } from "@/components/CompareDialog";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { ComposeDialog } from "@/components/ComposeDialog";
@@ -418,7 +419,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           <ChatPanel messages={messages} status={status} error={error} mode={mode} onModeChange={setMode} onSend={send} onStop={stop} onRevert={revert} />
         </aside>
         <main className="min-h-0">
-          <Sandbox files={files} view={view} device={device} busy={busy} inspect={inspect} onFix={fix} onEdit={editFile} onElement={changeElement} onInspectDone={() => setInspect(false)} measureRef={measureRef} />
+          <Sandbox files={files} view={view} device={device} busy={busy} inspect={inspect} onFix={fix} onEdit={editFile} onElement={changeElement} onInspectDone={() => setInspect(false)} measureRef={measureRef} runner={<RunnerPreview projectId={id} files={files} github={github} />} />
         </main>
       </div>
     </div>
