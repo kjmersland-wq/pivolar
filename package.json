@@ -13,6 +13,8 @@
     "@ai-sdk/anthropic": "^4.0.86",
     "@ai-sdk/react": "^4.0.153",
     "@codesandbox/sandpack-react": "^2.20.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
     "ai": "^7.0.149",
     "clsx": "^2.1.1",
     "fflate": "^0.8.3",

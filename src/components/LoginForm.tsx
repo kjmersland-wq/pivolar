@@ -34,7 +34,7 @@ export function LoginForm({ configured, emailRequired }: { configured: boolean; 
     <form onSubmit={submit} className="mt-7 space-y-3">
       {!configured && (
         <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-[13px] text-amber-400">
-          Innloggingen er ikke satt opp. Legg inn <code className="font-mono">APP_PASSWORD</code> og <code className="font-mono">APP_SECRET</code> i miljøvariablene.
+          Innloggingen er ikke satt opp. Legg inn <code className="font-mono">NEXT_PUBLIC_SUPABASE_URL</code>, <code className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> og <code className="font-mono">APP_EMAIL</code> i miljøvariablene.
         </p>
       )}
       {emailRequired && (

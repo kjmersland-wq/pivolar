@@ -7,7 +7,7 @@ Et privat verktøy for å bygge apper ved å snakke: du beskriver det du vil ha,
 - **Chat → kode:** Claude (via Vercel AI Gateway) bruker tre verktøy: `writeFile`, `editFile` og `deleteFile`.
 - **Prosjektet bygges av samtalen.** Filene regnes ut fra malen pluss alle ferdige verktøykall i chatten (`src/lib/files.ts`). Det gir «Gå tilbake hit» gratis: å kutte historikken kutter også filene.
 - **Forhåndsvisning:** Sandpack (React + TypeScript + Tailwind) kjører direkte i nettleseren, uten egen server.
-- **Innlogging:** ett passord og en signert cookie, bare for deg (`src/proxy.ts`).
+- **Innlogging:** Supabase Auth (e-post og passord), og bare adresser i `APP_EMAIL` slipper inn (`src/proxy.ts`).
 - **Lagring:** prosjekter og samtaler ligger i nettleseren (localStorage) i denne første etappen.
 
 ## Kjør lokalt
@@ -19,7 +19,7 @@ vercel env pull      # henter VERCEL_OIDC_TOKEN (gyldig i 12 timer)
 npm run dev
 ```
 
-Legg `APP_PASSWORD` og `APP_SECRET` i `.env.local` (se `.env.example`).
+Legg Supabase-nøklene og `APP_EMAIL` i `.env.local` (se `.env.example`), og kjør `node --env-file=.env.local scripts/create-owner.mts` én gang for å opprette eieren.
 
 ## AI Gateway
 
@@ -29,8 +29,10 @@ AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gr
 
 | Variabel | Hva |
 |---|---|
-| `APP_PASSWORD` | Passordet du skriver på innloggingssiden |
-| `APP_SECRET` | Tilfeldig streng (32+ tegn) som signerer innloggingen |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase-prosjektet (offentlige) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Bare server; brukes av `scripts/create-owner.mts` |
+| `APP_EMAIL` | Hvem som får logge inn (kommaseparert) |
+| `APP_PASSWORD` | Bare for `create-owner`; selve innloggingen går mot Supabase Auth |
 | `AI_GATEWAY_MODEL` | Valgfri modell, `provider/modell` |
 | `AI_GATEWAY_API_KEY` | Bare utenfor Vercel; på Vercel brukes OIDC automatisk |
 
