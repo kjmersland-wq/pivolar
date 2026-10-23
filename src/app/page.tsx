@@ -1,3 +1,4 @@
+import { ImportZip } from "@/components/ImportZip";
 import { LogOutButton } from "@/components/LogOutButton";
 import { Logo } from "@/components/Logo";
 import { ProjectGrid } from "@/components/ProjectGrid";
@@ -30,6 +31,9 @@ export default function Home() {
 
         <div className="mt-10">
           <PromptBox />
+        </div>
+        <div className="mt-5 flex justify-center">
+          <ImportZip />
         </div>
       </main>
 

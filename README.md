@@ -50,3 +50,9 @@ AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gr
 - Valgfritt: `GITHUB_OWNER`, `VERCEL_TEAM_ID`
 
 Publiserer du igjen, oppdateres samme repo og samme Vercel-prosjekt.
+
+## Import og eksport (fase 2)
+
+- **Importer ZIP** på forsiden: arkivet leses i minnet (aldri pakket ut til disk eller kjørt), og du får en rapport før prosjektet opprettes. Avvises: stier med `..`, absolutte stier, for mange eller for store filer, pakkebomber. `.env` og nøkkelfiler tas ikke med.
+- **Eksporter** i arbeidsflaten: ZIP med alle filer, `.env.example`, `EXPORT-REPORT.md` og `PIVOLAR-MANIFEST.json`. Nøkler fjernes. Binærfiler (bilder) lagres ikke i Pivolar ennå og må kopieres tilbake for hånd.
+- Plan, revisjon og faser: `docs/PIVOLAR-PLAN.md`.

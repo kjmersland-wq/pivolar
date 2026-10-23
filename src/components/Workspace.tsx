@@ -5,9 +5,10 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { ChevronLeft, Code2, Eye, LayoutTemplate, Monitor, MousePointerClick, Rocket, Smartphone, Tablet } from "lucide-react";
+import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Monitor, MousePointerClick, Rocket, Smartphone, Tablet } from "lucide-react";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { ComposeDialog } from "@/components/ComposeDialog";
+import { ExportDialog } from "@/components/ExportDialog";
 import { Logo } from "@/components/Logo";
 import { PublishDialog } from "@/components/PublishDialog";
 import { Sandbox, type Device, type PickedElement, type View } from "@/components/Preview";
@@ -49,6 +50,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [inspect, setInspect] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Code the user typed in the editor. Each edit remembers how many messages existed at that
   // moment, so reverting the chat also reverts the edits that came after.
@@ -217,6 +219,15 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
             <LayoutTemplate className="size-3.5" />
             <span className="hidden md:inline">Sett sammen</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            title="Last ned hele prosjektet som ZIP"
+            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
+          >
+            <Download className="size-3.5" />
+            <span className="hidden md:inline">Eksporter</span>
+          </button>
           <ThemeToggle />
           <button
             type="button"
@@ -232,6 +243,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
       </header>
 
       <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} onCompose={compose} initialName={name} />
+      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={id} name={name} files={files} />
       <PublishDialog open={publishOpen} onClose={() => setPublishOpen(false)} projectId={id} projectName={name} files={files} />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(340px,430px)_1fr]">

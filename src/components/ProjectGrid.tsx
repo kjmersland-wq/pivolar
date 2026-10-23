@@ -33,7 +33,10 @@ export function ProjectGrid() {
               <div className={`h-28 bg-gradient-to-br ${TINTS[index % TINTS.length]}`} />
               <div className="p-4">
                 <p className="truncate text-[14.5px] font-medium">{project.name}</p>
-                <p className="mt-0.5 text-[12.5px] text-faint">{ago(project.updatedAt)}</p>
+                <p className="mt-0.5 flex items-center gap-2 text-[12.5px] text-faint">
+                  {ago(project.updatedAt)}
+                  {project.framework && <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted">{project.framework}</span>}
+                </p>
               </div>
             </Link>
             <button

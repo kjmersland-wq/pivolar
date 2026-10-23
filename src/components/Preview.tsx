@@ -105,6 +105,8 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
   const frame = useRef<HTMLDivElement>(null);
   const [picked, setPicked] = useState<PickedElement | null>(null);
   const [pickId, setPickId] = useState(0);
+  // Imported projects bring their own package.json and layout, which the sandbox cannot run.
+  const previewable = !("/package.json" in files);
 
   const known = useRef(files);
   const snapshot = useRef(serialize(files));
@@ -187,6 +189,14 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
             </SandpackLayout>
           </motion.div>
         </div>
+        {!previewable && (
+          <div className="absolute inset-0 z-10 grid place-items-center bg-bg-soft p-8 text-center">
+            <div className="max-w-sm space-y-2">
+              <p className="text-[15px] font-medium">Forhåndsvisning støttes ikke for dette prosjektet ennå</p>
+              <p className="text-[13px] leading-relaxed text-muted">Det er importert utenfra og må kjøres i et isolert miljø for å vises. Bytt til «Kode» for å lese og redigere filene, eller til «Eksporter» for å laste dem ned.</p>
+            </div>
+          </div>
+        )}
         {picked ? (
           <ElementPanel
             key={pickId}

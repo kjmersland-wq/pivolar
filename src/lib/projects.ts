@@ -6,13 +6,14 @@ import { uid } from "@/lib/utils";
 import type { UserEdit } from "@/lib/files";
 
 /** Phase 1 keeps projects in this browser. The shape is ready to move to a database later. */
-export type ProjectMeta = { id: string; name: string; createdAt: number; updatedAt: number };
+export type ProjectMeta = { id: string; name: string; createdAt: number; updatedAt: number; framework?: string };
 
 const LIST_KEY = "atelier:projects:v1";
 const EVENT = "atelier:projects-changed";
 const msgKey = (id: string) => `atelier:msgs:${id}`;
 const editsKey = (id: string) => `atelier:edits:${id}`;
 const publishKey = (id: string) => `atelier:publish:${id}`;
+const importKey = (id: string) => `atelier:import:${id}`;
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -89,6 +90,7 @@ export function deleteProject(id: string) {
     window.localStorage.removeItem(msgKey(id));
     window.localStorage.removeItem(editsKey(id));
     window.localStorage.removeItem(publishKey(id));
+    window.localStorage.removeItem(importKey(id));
   } catch {
     /* ignore */
   }
@@ -155,4 +157,34 @@ export function saveMessages(id: string, messages: UIMessage[]) {
   write(msgKey(id), withoutImageData(messages));
   const list = read<ProjectMeta[]>(LIST_KEY, []);
   if (list.some((p) => p.id === id)) saveList(list.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p)));
+}
+
+/** What is known about a project that came from outside, kept for the export manifest. */
+export type ImportInfo = { source: "zip"; fileName: string; at: number; skippedBinaries: string[]; omittedSecrets: string[] };
+
+export function loadImportInfo(id: string): ImportInfo | null {
+  return read<ImportInfo | null>(importKey(id), null);
+}
+
+/**
+ * Creates a project from imported files. Unlike the other writes this one reports failure, because
+ * browser storage is small and a half-saved import would silently lose files.
+ */
+export function importProject(name: string, files: Record<string, string>, info: ImportInfo, framework: string): { ok: true; project: ProjectMeta } | { ok: false; error: string } {
+  const project: ProjectMeta = { id: uid("p"), name, createdAt: Date.now(), updatedAt: Date.now(), framework };
+  const edits: UserEdit[] = Object.entries(files).map(([path, content]) => ({ at: 0, path, content }));
+  try {
+    window.localStorage.setItem(editsKey(project.id), JSON.stringify(edits));
+    window.localStorage.setItem(importKey(project.id), JSON.stringify(info));
+  } catch {
+    try {
+      window.localStorage.removeItem(editsKey(project.id));
+      window.localStorage.removeItem(importKey(project.id));
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: "Nettleserlagringen er full. Slett et gammelt prosjekt og prøv igjen." };
+  }
+  saveList([project, ...read<ProjectMeta[]>(LIST_KEY, [])]);
+  return { ok: true, project };
 }
