@@ -4,14 +4,14 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
-import { ChevronLeft, Code2, Eye, Monitor, Rocket, Smartphone, Tablet } from "lucide-react";
+import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
+import { ChevronLeft, Code2, Eye, Monitor, MousePointerClick, Rocket, Smartphone, Tablet } from "lucide-react";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { Logo } from "@/components/Logo";
-import { Sandbox, type Device, type View } from "@/components/Preview";
+import { Sandbox, type Device, type PickedElement, type View } from "@/components/Preview";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { deriveFiles } from "@/lib/files";
-import { getProject, loadMessages, saveMessages, takePendingPrompt, updateProject } from "@/lib/projects";
+import { deriveFiles, type UserEdit } from "@/lib/files";
+import { getProject, loadEdits, loadMessages, saveEdits, saveMessages, takePendingPrompt, updateProject } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 
 function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (value: T) => void; options: { value: T; label?: string; icon: typeof Eye }[] }) {
@@ -34,7 +34,7 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
   );
 }
 
-function Inner({ id, initialMessages, initialName }: { id: string; initialMessages: UIMessage[]; initialName: string }) {
+function Inner({ id, initialMessages, initialEdits, initialName }: { id: string; initialMessages: UIMessage[]; initialEdits: UserEdit[]; initialName: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("build");
   const modeRef = useRef(mode);
@@ -44,14 +44,35 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
   const [view, setView] = useState<View>("preview");
   const [device, setDevice] = useState<Device>("desktop");
   const [name, setName] = useState(initialName);
+  const [inspect, setInspect] = useState(false);
 
-  // The body is read when a request is sent, never during render, so the ref is safe here.
+  // Code the user typed in the editor. Each edit remembers how many messages existed at that
+  // moment, so reverting the chat also reverts the edits that came after.
+  const [edits, setEdits] = useState<UserEdit[]>(initialEdits);
+  const editsRef = useRef(edits);
+  useEffect(() => {
+    editsRef.current = edits;
+    saveEdits(id, edits);
+  }, [edits, id]);
+
+  // The body is read when a request is sent, never during render, so the refs are safe here.
   // eslint-disable-next-line react-hooks/refs
-  const transport = useMemo(() => new DefaultChatTransport({ api: "/api/chat", body: () => ({ mode: modeRef.current }) }), []);
+  const transport = useMemo(() => new DefaultChatTransport({ api: "/api/chat", body: () => ({ mode: modeRef.current, edits: editsRef.current }) }), []);
   const { messages, sendMessage, status, stop, setMessages, error } = useChat({ id, messages: initialMessages, transport });
   const busy = status === "submitted" || status === "streaming";
 
-  const files = useMemo(() => deriveFiles(messages), [messages]);
+  const files = useMemo(() => deriveFiles(messages, edits), [messages, edits]);
+  const messageCount = useRef(messages.length);
+  useEffect(() => {
+    messageCount.current = messages.length;
+  }, [messages.length]);
+
+  const editFile = useCallback((path: string, content: string) => {
+    setEdits((prev) => {
+      const at = messageCount.current;
+      return [...prev.filter((edit) => !(edit.at === at && edit.path === path)), { at, path, content }];
+    });
+  }, []);
 
   // Save the chat whenever a turn is finished.
   useEffect(() => {
@@ -83,7 +104,27 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
     }
   }, [messages, name, id]);
 
-  const send = useCallback((text: string) => sendMessage({ text }), [sendMessage]);
+  const send = useCallback(
+    (text: string, attachments: FileUIPart[] = []) => sendMessage(attachments.length > 0 ? { text, files: attachments } : { text }),
+    [sendMessage],
+  );
+  const changeElement = useCallback(
+    (picked: PickedElement, request: string) => {
+      setMode("build");
+      modeRef.current = "build";
+      const details = [
+        `Element: <${picked.tag}>`,
+        picked.text ? `Tekst: «${picked.text}»` : "",
+        picked.className ? `Klasser: ${picked.className}` : "",
+        picked.components.length > 0 ? `Komponenter (innerst først): ${picked.components.join(" > ")}` : "",
+        `HTML: ${picked.html}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      sendMessage({ text: `${request}\n\n<valgt-element>\n${details}\n</valgt-element>` });
+    },
+    [sendMessage],
+  );
   const fix = useCallback(
     (message: string) => {
       setMode("build");
@@ -95,7 +136,9 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
   const revert = useCallback(
     (messageId: string) => {
       const index = messages.findIndex((m) => m.id === messageId);
-      if (index >= 0) setMessages(messages.slice(0, index + 1));
+      if (index < 0) return;
+      setMessages(messages.slice(0, index + 1));
+      setEdits((prev) => prev.filter((edit) => edit.at <= index + 1));
     },
     [messages, setMessages],
   );
@@ -129,6 +172,20 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
 
         <div className="flex items-center gap-1.5">
           {view === "preview" && (
+            <button
+              type="button"
+              onClick={() => setInspect((on) => !on)}
+              title="Velg et element i forhåndsvisningen og be om en endring"
+              className={cn(
+                "flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[12.5px] transition",
+                inspect ? "border-accent bg-accent/10 text-accent" : "border-line bg-surface-2 text-muted hover:text-fg",
+              )}
+            >
+              <MousePointerClick className="size-3.5" />
+              <span className="hidden md:inline">{inspect ? "Velger …" : "Velg element"}</span>
+            </button>
+          )}
+          {view === "preview" && (
             <Segmented
               value={device}
               onChange={setDevice}
@@ -157,7 +214,7 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
           <ChatPanel messages={messages} status={status} error={error} mode={mode} onModeChange={setMode} onSend={send} onStop={stop} onRevert={revert} />
         </aside>
         <main className="min-h-0">
-          <Sandbox files={files} view={view} device={device} busy={busy} onFix={fix} />
+          <Sandbox files={files} view={view} device={device} busy={busy} inspect={inspect} onFix={fix} onEdit={editFile} onElement={changeElement} onInspectDone={() => setInspect(false)} />
         </main>
       </div>
     </div>
@@ -165,12 +222,12 @@ function Inner({ id, initialMessages, initialName }: { id: string; initialMessag
 }
 
 function Loader({ id }: { id: string | undefined }) {
-  const [state, setState] = useState<{ messages: UIMessage[]; name: string } | "missing" | null>(null);
+  const [state, setState] = useState<{ messages: UIMessage[]; edits: UserEdit[]; name: string } | "missing" | null>(null);
   useEffect(() => {
     if (!id) return;
     const project = getProject(id);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage only exists in the browser
-    setState(project ? { messages: loadMessages(id), name: project.name } : "missing");
+    setState(project ? { messages: loadMessages(id), edits: loadEdits(id), name: project.name } : "missing");
   }, [id]);
 
   if (!id || state === null) {
@@ -193,7 +250,7 @@ function Loader({ id }: { id: string | undefined }) {
       </div>
     );
   }
-  return <Inner key={id} id={id} initialMessages={state.messages} initialName={state.name} />;
+  return <Inner key={id} id={id} initialMessages={state.messages} initialEdits={state.edits} initialName={state.name} />;
 }
 
 function FromRoute() {

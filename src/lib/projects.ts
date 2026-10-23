@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { UIMessage } from "ai";
 import { uid } from "@/lib/utils";
+import type { UserEdit } from "@/lib/files";
 
 /** Phase 1 keeps projects in this browser. The shape is ready to move to a database later. */
 export type ProjectMeta = { id: string; name: string; createdAt: number; updatedAt: number };
@@ -10,6 +11,7 @@ export type ProjectMeta = { id: string; name: string; createdAt: number; updated
 const LIST_KEY = "atelier:projects:v1";
 const EVENT = "atelier:projects-changed";
 const msgKey = (id: string) => `atelier:msgs:${id}`;
+const editsKey = (id: string) => `atelier:edits:${id}`;
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -84,6 +86,7 @@ export function deleteProject(id: string) {
   saveList(read<ProjectMeta[]>(LIST_KEY, []).filter((p) => p.id !== id));
   try {
     window.localStorage.removeItem(msgKey(id));
+    window.localStorage.removeItem(editsKey(id));
   } catch {
     /* ignore */
   }
@@ -114,8 +117,29 @@ export function loadMessages(id: string): UIMessage[] {
   return read<UIMessage[]>(msgKey(id), []);
 }
 
+/**
+ * Pictures are large (base64) and localStorage is small, so saved chats keep only a marker where an
+ * image was. The current session still shows the real picture.
+ */
+function withoutImageData(messages: UIMessage[]): UIMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    parts: message.parts.map((part) =>
+      part.type === "file" && part.url.startsWith("data:") ? { ...part, url: "" } : part,
+    ),
+  })) as UIMessage[];
+}
+
+export function loadEdits(id: string): UserEdit[] {
+  return read<UserEdit[]>(editsKey(id), []);
+}
+
+export function saveEdits(id: string, edits: UserEdit[]) {
+  write(editsKey(id), edits);
+}
+
 export function saveMessages(id: string, messages: UIMessage[]) {
-  write(msgKey(id), messages);
+  write(msgKey(id), withoutImageData(messages));
   const list = read<ProjectMeta[]>(LIST_KEY, []);
   if (list.some((p) => p.id === id)) saveList(list.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p)));
 }

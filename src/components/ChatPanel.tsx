@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { UIMessage } from "ai";
+import type { FileUIPart, UIMessage } from "ai";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, ArrowUp, Check, FilePen, FilePlus2, Hammer, Loader2, MessageSquare, Square, Trash2, Undo2 } from "lucide-react";
+import { AlertTriangle, ArrowUp, Check, FilePen, FilePlus2, Hammer, ImageIcon, Loader2, MessageSquare, MousePointerClick, Paperclip, Square, Trash2, Undo2, X } from "lucide-react";
 import { Markdown } from "@/components/Markdown";
 import { LogoMark } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
-type Part = { type: string; text?: string; state?: string; input?: Record<string, unknown>; output?: { ok?: boolean; message?: string } };
+type Part = { type: string; text?: string; url?: string; mediaType?: string; filename?: string; state?: string; input?: Record<string, unknown>; output?: { ok?: boolean; message?: string } };
 
 export type Mode = "build" | "chat";
 
@@ -18,10 +18,68 @@ type Props = {
   error?: Error | undefined;
   mode: Mode;
   onModeChange: (mode: Mode) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string, files: FileUIPart[]) => void;
   onStop: () => void;
   onRevert: (messageId: string) => void;
 };
+
+const MAX_IMAGES = 4;
+
+/** Shrinks a picture before sending: smaller requests, and it fits in browser storage. */
+async function toDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const context = canvas.getContext("2d")!;
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+const PICKED = /<valgt-element>([\s\S]*?)<\/valgt-element>/;
+
+function UserMessage({ message }: { message: UIMessage }) {
+  const parts = message.parts as Part[];
+  const raw = parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+  const picked = PICKED.exec(raw)?.[1];
+  const text = raw.replace(PICKED, "").trim();
+  const tag = picked ? /Element: (<[^>\s]+>)/.exec(picked)?.[1] : undefined;
+  const images = parts.filter((p) => p.type === "file" && p.mediaType?.startsWith("image/"));
+  return (
+    <div className="flex max-w-[88%] flex-col items-end gap-2">
+      {images.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-2">
+          {images.map((image, index) =>
+            image.url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- user pictures are data URLs
+              <img key={index} src={image.url} alt={image.filename ?? "Bilde"} className="max-h-40 max-w-[220px] rounded-xl border border-line object-cover" />
+            ) : (
+              <div key={index} className="flex items-center gap-1.5 rounded-xl border border-dashed border-line px-3 py-2 text-[12px] text-faint">
+                <ImageIcon className="size-3.5" />
+                Bilde (ikke lagret)
+              </div>
+            ),
+          )}
+        </div>
+      )}
+      {(text || picked) && (
+        <div className="whitespace-pre-wrap rounded-2xl rounded-tr-md border border-line bg-surface-2 px-3.5 py-2.5 text-[14px] leading-relaxed">
+          {picked && (
+            <span className="mb-1.5 flex w-fit items-center gap-1.5 rounded-md bg-accent/10 px-2 py-0.5 text-[11.5px] text-accent">
+              <MousePointerClick className="size-3" />
+              Valgt element {tag}
+            </span>
+          )}
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STEP_META: Record<string, { icon: typeof FilePen; active: string; done: string }> = {
   writeFile: { icon: FilePlus2, active: "Skriver", done: "Skrev" },
@@ -91,6 +149,9 @@ function AssistantMessage({ message, last, busy, onRevert }: { message: UIMessag
 
 export function ChatPanel({ messages, status, error, mode, onModeChange, onSend, onStop, onRevert }: Props) {
   const [input, setInput] = useState("");
+  const [images, setImages] = useState<{ id: string; url: string; name: string }[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const busy = status === "submitted" || status === "streaming";
@@ -107,11 +168,25 @@ export function ChatPanel({ messages, status, error, mode, onModeChange, onSend,
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [input]);
 
+  async function addFiles(list: FileList | File[]) {
+    const wanted = Array.from(list).filter((file) => file.type.startsWith("image/"));
+    for (const file of wanted.slice(0, Math.max(0, MAX_IMAGES - images.length))) {
+      try {
+        const url = await toDataUrl(file);
+        setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, { id: crypto.randomUUID(), url, name: file.name || "bilde.jpg" }]));
+      } catch {
+        /* an unreadable file is simply skipped */
+      }
+    }
+  }
+
   function submit() {
     const text = input.trim();
-    if (!text || busy) return;
-    onSend(text);
+    if ((!text && images.length === 0) || busy) return;
+    const files: FileUIPart[] = images.map((image) => ({ type: "file", mediaType: "image/jpeg", filename: image.name, url: image.url }));
+    onSend(text || "Bygg dette etter bildet.", files);
     setInput("");
+    setImages([]);
   }
 
   const lastAssistantIndex = messages.reduce((acc, m, i) => (m.role === "assistant" ? i : acc), -1);
@@ -133,9 +208,7 @@ export function ChatPanel({ messages, status, error, mode, onModeChange, onSend,
           {messages.map((message, index) =>
             message.role === "user" ? (
               <motion.div key={message.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex justify-end">
-                <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-tr-md border border-line bg-surface-2 px-3.5 py-2.5 text-[14px] leading-relaxed">
-                  {(message.parts as Part[]).map((p) => (p.type === "text" ? p.text : "")).join("")}
-                </div>
+                <UserMessage message={message} />
               </motion.div>
             ) : (
               <motion.div key={message.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
@@ -170,12 +243,49 @@ export function ChatPanel({ messages, status, error, mode, onModeChange, onSend,
       </div>
 
       <div className="border-t border-line p-3">
-        <div className="glass rounded-2xl p-2 shadow-[var(--shadow)] transition focus-within:border-line-strong">
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            void addFiles(e.dataTransfer.files);
+          }}
+          className={cn("glass rounded-2xl p-2 shadow-[var(--shadow)] transition focus-within:border-line-strong", dragging && "border-accent")}
+        >
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-1.5 pb-1.5 pt-1">
+              {images.map((image) => (
+                <div key={image.id} className="group/thumb relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- local data URL preview */}
+                  <img src={image.url} alt={image.name} className="size-14 rounded-lg border border-line object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setImages((prev) => prev.filter((p) => p.id !== image.id))}
+                    className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-fg text-bg opacity-0 transition group-hover/thumb:opacity-100"
+                    aria-label="Fjern bilde"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={textarea}
             value={input}
             rows={1}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              const pasted = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+              if (pasted.length > 0) {
+                e.preventDefault();
+                void addFiles(pasted);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
@@ -186,6 +296,18 @@ export function ChatPanel({ messages, status, error, mode, onModeChange, onSend,
             className="block max-h-[200px] w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-relaxed outline-none placeholder:text-faint"
           />
           <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-1">
+            <input ref={picker} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ""; }} />
+            <button
+              type="button"
+              onClick={() => picker.current?.click()}
+              disabled={images.length >= MAX_IMAGES}
+              className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+              aria-label="Legg ved bilde"
+              title="Legg ved bilde (eller lim inn / dra hit)"
+            >
+              <Paperclip className="size-4" />
+            </button>
             <div className="flex rounded-lg bg-surface-2 p-0.5 text-[12px]">
               {(
                 [
@@ -207,6 +329,7 @@ export function ChatPanel({ messages, status, error, mode, onModeChange, onSend,
                 </button>
               ))}
             </div>
+            </div>
             {busy ? (
               <button type="button" onClick={onStop} className="grid size-8 place-items-center rounded-lg bg-fg text-bg transition hover:opacity-85" aria-label="Stopp">
                 <Square className="size-3.5 fill-current" />
@@ -215,7 +338,7 @@ export function ChatPanel({ messages, status, error, mode, onModeChange, onSend,
               <button
                 type="button"
                 onClick={submit}
-                disabled={!input.trim()}
+                disabled={!input.trim() && images.length === 0}
                 className="bg-brand grid size-8 place-items-center rounded-lg text-white shadow-[0_6px_18px_-6px_var(--accent)] transition enabled:hover:brightness-110 disabled:opacity-40 disabled:shadow-none"
                 aria-label="Send"
               >

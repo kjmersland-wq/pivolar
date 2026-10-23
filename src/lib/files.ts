@@ -15,7 +15,8 @@ export const TEMPLATE: FileMap = {
   );
 }
 `,
-  "/index.tsx": `import React, { StrictMode } from "react";
+  "/index.tsx": `import "./atelier-inspector";
+import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import App from "./App";
@@ -26,6 +27,66 @@ root.render(
     <App />
   </StrictMode>
 );
+`,
+  "/atelier-inspector.js": String.raw`/* Atelier inspector. Lets the editor pick an element in this preview. Hidden from the AI and the user. */
+(function () {
+  if (window.__atelierInspector) return;
+  window.__atelierInspector = true;
+  var active = false;
+  var box = null;
+  function ensureBox() {
+    if (box) return box;
+    box = document.createElement("div");
+    box.style.cssText = "position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #f43f5e;background:rgba(244,63,94,.12);border-radius:4px;transition:all .06s ease-out;display:none";
+    document.body.appendChild(box);
+    return box;
+  }
+  function components(el) {
+    var names = [];
+    var key = null;
+    for (var k in el) { if (k.indexOf("__reactFiber$") === 0) { key = k; break; } }
+    var fiber = key ? el[key] : null;
+    while (fiber && names.length < 5) {
+      if (typeof fiber.type === "function" && fiber.type.name && names.indexOf(fiber.type.name) === -1) names.push(fiber.type.name);
+      fiber = fiber.return;
+    }
+    return names;
+  }
+  function describe(el) {
+    var html = el.outerHTML || "";
+    return {
+      tag: el.tagName.toLowerCase(),
+      text: (el.innerText || "").trim().slice(0, 160),
+      className: typeof el.className === "string" ? el.className.slice(0, 240) : "",
+      html: html.length > 500 ? html.slice(0, 500) + "…" : html,
+      components: components(el)
+    };
+  }
+  window.addEventListener("message", function (e) {
+    if (!e.data || e.data.type !== "atelier:inspect") return;
+    active = !!e.data.on;
+    document.documentElement.style.cursor = active ? "crosshair" : "";
+    if (!active && box) box.style.display = "none";
+  });
+  document.addEventListener("mousemove", function (e) {
+    if (!active) return;
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el || el === box || el === document.body || el === document.documentElement) return;
+    var r = el.getBoundingClientRect();
+    var b = ensureBox();
+    b.style.display = "block";
+    b.style.left = r.left + "px"; b.style.top = r.top + "px";
+    b.style.width = r.width + "px"; b.style.height = r.height + "px";
+  }, true);
+  document.addEventListener("click", function (e) {
+    if (!active) return;
+    e.preventDefault(); e.stopPropagation();
+    var el = e.target;
+    if (!el || el === box) return;
+    window.parent.postMessage({ type: "atelier:select", info: describe(el) }, "*");
+  }, true);
+  window.parent.postMessage({ type: "atelier:ready" }, "*");
+})();
 `,
   "/styles.css": `html, body, #root { margin: 0; min-height: 100%; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
@@ -47,7 +108,18 @@ export function normalizePath(path: string) {
   return value;
 }
 
+/** Files the AI and the user must not change: the sandbox entry point and the inspector it loads. */
+export const PROTECTED_PATHS = new Set(["/index.tsx", "/atelier-inspector.js"]);
+
 export type ToolResult = { ok: boolean; message: string };
+
+/** A change the user typed into the code editor. `at` is how many chat messages existed at that moment. */
+export type UserEdit = { at: number; path: string; content: string };
+
+/** Files shown to the AI and in the editor: everything except the protected ones. */
+export function visibleFiles(files: FileMap): FileMap {
+  return Object.fromEntries(Object.entries(files).filter(([path]) => !PROTECTED_PATHS.has(path)));
+}
 
 type AnyPart = { type: string; state?: string; input?: Record<string, unknown>; output?: Partial<ToolResult> };
 
@@ -56,6 +128,9 @@ type AnyPart = { type: string; state?: string; input?: Record<string, unknown>; 
  * client to rebuild the project from the chat history, so both always agree on the result.
  */
 export function applyTool(files: FileMap, tool: string, input: Record<string, unknown>): ToolResult {
+  if (PROTECTED_PATHS.has(normalizePath(String(input.path ?? "")))) {
+    return { ok: false, message: "Den filen er beskyttet og kan ikke endres." };
+  }
   if (tool === "writeFile") {
     const path = normalizePath(String(input.path ?? ""));
     if (path === "/") return { ok: false, message: "Mangler filsti." };
@@ -86,16 +161,27 @@ export function applyTool(files: FileMap, tool: string, input: Record<string, un
   return { ok: false, message: `Ukjent verktøy ${tool}` };
 }
 
-/** Rebuilds the whole project from the template plus every finished tool call in the chat. */
-export function deriveFiles(messages: UIMessage[]): FileMap {
+/**
+ * Rebuilds the whole project from the template, every finished tool call in the chat and the
+ * user's own code edits, each applied at the point in the conversation where it happened.
+ */
+export function deriveFiles(messages: UIMessage[], edits: UserEdit[] = []): FileMap {
   const files: FileMap = { ...TEMPLATE };
-  for (const message of messages) {
-    if (message.role !== "assistant") continue;
+  const applyEdits = (match: (at: number) => boolean) => {
+    for (const edit of edits) {
+      const path = normalizePath(edit.path);
+      if (match(edit.at) && !PROTECTED_PATHS.has(path)) files[path] = edit.content;
+    }
+  };
+  messages.forEach((message, index) => {
+    applyEdits((at) => at === index);
+    if (message.role !== "assistant") return;
     for (const raw of message.parts) {
       const part = raw as AnyPart;
       if (!part.type.startsWith("tool-") || part.state !== "output-available" || part.output?.ok === false) continue;
       applyTool(files, part.type.slice(5), part.input ?? {});
     }
-  }
+  });
+  applyEdits((at) => at >= messages.length);
   return files;
 }

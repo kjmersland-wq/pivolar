@@ -1,7 +1,7 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
-import { SANDBOX_DEPENDENCIES, applyTool, deriveFiles, type FileMap } from "@/lib/files";
+import { SANDBOX_DEPENDENCIES, applyTool, deriveFiles, visibleFiles, type FileMap, type UserEdit } from "@/lib/files";
 
 export const maxDuration = 300;
 
@@ -25,14 +25,19 @@ const MODEL = process.env.ANTHROPIC_API_KEY
   : (process.env.AI_GATEWAY_MODEL ?? "anthropic/claude-sonnet-5.5");
 
 function systemPrompt(files: FileMap, mode: "build" | "chat") {
-  const listing = Object.entries(files)
+  const listing = Object.entries(visibleFiles(files))
     .map(([path, content]) => `--- ${path}\n${content}`)
     .join("\n\n");
   return `Du er Atelier, en erfaren designer og frontend-utvikler som bygger små apper sammen med brukeren.
 Brukeren skriver vanligvis norsk. Svar på samme språk som brukeren, kort og vennlig, og skriv teksten i selve appen på språket brukeren ber om.
 
+BRUKERENS EGNE ENDRINGER OG BILDER
+- Brukeren kan redigere kode selv. «GJELDENDE FILER» under er alltid den nyeste versjonen, med brukerens endringer. Bygg videre på den, ikke på det du husker.
+- Brukeren kan sende bilder (skjermbilder, skisser, design). Gjenskap det du ser så nøyaktig som mulig: layout, farger, typografi og stemning. Beskriv kort hva du tolket.
+- Brukeren kan velge et element i forhåndsvisningen. Meldingen har da en blokk <valgt-element> med tag, tekst, klasser og komponentnavn. Finn elementet i koden (søk etter teksten og klassene) og gjør kun endringen brukeren ber om. Ikke endre andre tekster, e-postadresser, priser eller stil som ikke er nevnt. Gjelder ønsket tydelig hele nettstedet (for eksempel et navn), endre det samme overalt, men si fra om det.
+
 PROSJEKTET
-- Det er en React + TypeScript-app som kjører i en nettleser-sandbox (Sandpack). Inngangen er /index.tsx, som importerer ./App og ./styles.css. Ikke endre /index.tsx uten god grunn.
+- Det er en React + TypeScript-app som kjører i en nettleser-sandbox (Sandpack). Inngangen er /index.tsx (beskyttet, du kan ikke endre den) og den importerer ./App og ./styles.css. Bygg alt fra /App.tsx.
 - Styling er Tailwind CSS (via CDN, alle vanlige klasser virker). Bruk /styles.css bare til det Tailwind ikke dekker.
 - Tillatte pakker: react, react-dom, ${Object.keys(SANDBOX_DEPENDENCIES).join(", ")}. Ikke importer noe annet.
 - Grafer og diagrammer: tegn dem selv med SVG eller div-er (det finnes ingen diagrambibliotek).
@@ -59,18 +64,35 @@ GJELDENDE FILER
 ${listing}`;
 }
 
+/**
+ * Saved chats keep only a marker where a picture was (images are too big for browser storage).
+ * Those empty pictures cannot be sent to the model, so they become a short text note instead.
+ */
+function withoutEmptyImages(messages: UIMessage[]): UIMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    parts: message.parts.map((part) =>
+      part.type === "file" && !part.url ? { type: "text" as const, text: "[Bilde fra en tidligere melding, ikke lenger tilgjengelig]" } : part,
+    ),
+  })) as UIMessage[];
+}
+
 export async function POST(request: Request) {
-  const { messages, mode = "build" } = (await request.json()) as { messages: UIMessage[]; mode?: "build" | "chat" };
+  const { messages, mode = "build", edits = [] } = (await request.json()) as {
+    messages: UIMessage[];
+    mode?: "build" | "chat";
+    edits?: UserEdit[];
+  };
 
   // The tools work on a copy of the project, so a later tool call in the same answer sees earlier ones.
-  const working: FileMap = deriveFiles(messages);
+  const working: FileMap = deriveFiles(messages, edits);
 
   const run = (tool: string) => async (input: Record<string, unknown>) => applyTool(working, tool, input);
 
   const result = streamText({
     model: MODEL,
     instructions: systemPrompt(working, mode),
-    messages: await convertToModelMessages(messages),
+    messages: await convertToModelMessages(withoutEmptyImages(messages)),
     stopWhen: isStepCount(25),
     ...(mode === "build"
       ? {
