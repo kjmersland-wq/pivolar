@@ -10,7 +10,8 @@ import {
   useSandpack,
 } from "@codesandbox/sandpack-react";
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowUp, MousePointerClick, Wand2, X } from "lucide-react";
+import { AlertTriangle, Wand2 } from "lucide-react";
+import { ElementPanel, type Picked } from "@/components/ElementPanel";
 import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, TAILWIND_CDN, type FileMap } from "@/lib/files";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,7 @@ export type Device = "desktop" | "tablet" | "mobile";
 export type View = "preview" | "code";
 
 /** What the inspector inside the preview reports about the element the user clicked. */
-export type PickedElement = { tag: string; text: string; className: string; html: string; components: string[] };
+export type PickedElement = Picked;
 
 const WIDTHS: Record<Device, string> = { desktop: "100%", tablet: "820px", mobile: "390px" };
 
@@ -87,51 +88,6 @@ function EditorBridge({
   return null;
 }
 
-function SelectionBar({ picked, onSend, onClose }: { picked: PickedElement; onSend: (text: string) => void; onClose: () => void }) {
-  const [text, setText] = useState("");
-  const label = picked.text ? `«${picked.text.length > 48 ? `${picked.text.slice(0, 48)}…` : picked.text}»` : "";
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="glass absolute inset-x-4 bottom-4 z-20 rounded-2xl p-3 shadow-[var(--shadow)]"
-    >
-      <div className="flex items-center gap-2 pb-2 text-[12px] text-muted">
-        <MousePointerClick className="size-3.5 text-accent" />
-        <span className="font-mono text-fg">&lt;{picked.tag}&gt;</span>
-        {label && <span className="truncate">{label}</span>}
-        {picked.components[0] && <span className="ml-auto shrink-0 text-faint">i {picked.components[0]}</span>}
-        <button type="button" onClick={onClose} className="grid size-6 shrink-0 place-items-center rounded-md text-faint transition hover:bg-surface-2 hover:text-fg" aria-label="Lukk">
-          <X className="size-3.5" />
-        </button>
-      </div>
-      <form
-        className="flex items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (text.trim()) onSend(text.trim());
-        }}
-      >
-        <input
-          autoFocus
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Hva vil du endre på dette elementet?"
-          className="min-w-0 flex-1 rounded-xl border border-line bg-surface-2 px-3 py-2 text-[13.5px] outline-none placeholder:text-faint focus:border-line-strong"
-        />
-        <button
-          type="submit"
-          disabled={!text.trim()}
-          className="bg-brand grid size-9 shrink-0 place-items-center rounded-xl text-white transition enabled:hover:brightness-110 disabled:opacity-40"
-          aria-label="Send endring"
-        >
-          <ArrowUp className="size-4" />
-        </button>
-      </form>
-    </motion.div>
-  );
-}
-
 type SandboxProps = {
   files: FileMap;
   view: View;
@@ -148,6 +104,7 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
   const theme = useTheme();
   const frame = useRef<HTMLDivElement>(null);
   const [picked, setPicked] = useState<PickedElement | null>(null);
+  const [pickId, setPickId] = useState(0);
 
   const known = useRef(files);
   const snapshot = useRef(serialize(files));
@@ -197,7 +154,10 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
       const target = iframe()?.contentWindow;
       if (!target || event.source !== target || !event.data || typeof event.data !== "object") return;
       if (event.data.type === "atelier:ready") send();
-      if (event.data.type === "atelier:select") setPicked(event.data.info as PickedElement);
+      if (event.data.type === "atelier:select") {
+        setPicked(event.data.info as PickedElement);
+        setPickId((id) => id + 1);
+      }
     };
     window.addEventListener("message", onMessage);
     send();
@@ -228,8 +188,12 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
           </motion.div>
         </div>
         {picked ? (
-          <SelectionBar
+          <ElementPanel
+            key={pickId}
             picked={picked}
+            files={files}
+            onFile={onEdit}
+            onPicked={setPicked}
             onClose={() => setPicked(null)}
             onSend={(request) => {
               onElement(picked, request);

@@ -5,9 +5,13 @@ export async function POST(request: Request) {
   if (!authConfigured()) {
     return NextResponse.json({ error: "Innlogging er ikke satt opp (APP_PASSWORD og APP_SECRET mangler)." }, { status: 500 });
   }
-  const { password } = (await request.json().catch(() => ({}))) as { password?: string };
-  if (typeof password !== "string" || !safeEqual(password, process.env.APP_PASSWORD!)) {
-    return NextResponse.json({ error: "Feil passord." }, { status: 401 });
+  const { email, password } = (await request.json().catch(() => ({}))) as { email?: string; password?: string };
+  // Both checks always run, so a wrong e-mail is not distinguishable from a wrong password.
+  const wantEmail = process.env.APP_EMAIL?.trim().toLowerCase();
+  const emailOk = !wantEmail || (typeof email === "string" && safeEqual(email.trim().toLowerCase(), wantEmail));
+  const passwordOk = typeof password === "string" && safeEqual(password, process.env.APP_PASSWORD!);
+  if (!emailOk || !passwordOk) {
+    return NextResponse.json({ error: wantEmail ? "Feil e-post eller passord." : "Feil passord." }, { status: 401 });
   }
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SESSION_COOKIE, await createSession(), {

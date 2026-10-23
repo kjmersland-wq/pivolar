@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
-export function LoginForm({ configured }: { configured: boolean }) {
+export function LoginForm({ configured, emailRequired }: { configured: boolean; emailRequired: boolean }) {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -17,7 +18,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
     const response = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ email, password }),
     });
     if (response.ok) {
       router.replace("/");
@@ -36,9 +37,20 @@ export function LoginForm({ configured }: { configured: boolean }) {
           Innloggingen er ikke satt opp. Legg inn <code className="font-mono">APP_PASSWORD</code> og <code className="font-mono">APP_SECRET</code> i miljøvariablene.
         </p>
       )}
+      {emailRequired && (
+        <input
+          type="email"
+          autoFocus
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="E-post"
+          autoComplete="username"
+          className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-3 text-[15px] outline-none transition placeholder:text-faint focus:border-line-strong"
+        />
+      )}
       <input
         type="password"
-        autoFocus
+        autoFocus={!emailRequired}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         placeholder="Passord"
@@ -48,7 +60,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
       {error && <p className="text-[13px] text-red-400">{error}</p>}
       <button
         type="submit"
-        disabled={busy || !password}
+        disabled={busy || !password || (emailRequired && !email)}
         className="bg-brand flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[15px] font-medium text-white shadow-[0_8px_24px_-10px_var(--accent)] transition enabled:hover:brightness-110 disabled:opacity-50"
       >
         {busy && <Loader2 className="size-4 animate-spin" />}
