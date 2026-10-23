@@ -85,13 +85,14 @@ const STEP_META: Record<string, { icon: typeof FilePen; active: string; done: st
   writeFile: { icon: FilePlus2, active: "Skriver", done: "Skrev" },
   editFile: { icon: FilePen, active: "Endrer", done: "Endret" },
   deleteFile: { icon: Trash2, active: "Sletter", done: "Slettet" },
+  searchImages: { icon: ImageIcon, active: "Søker etter bilder", done: "Fant bilder" },
 };
 
 function ToolStep({ part }: { part: Part }) {
   const name = part.type.slice(5);
   const meta = STEP_META[name];
   if (!meta) return null;
-  const path = String(part.input?.path ?? "");
+  const path = String(part.input?.path ?? part.input?.query ?? "");
   const failed = part.state === "output-error" || part.output?.ok === false;
   const done = part.state === "output-available" && !failed;
   const Icon = meta.icon;

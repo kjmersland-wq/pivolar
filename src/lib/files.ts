@@ -98,6 +98,9 @@ export const SANDBOX_DEPENDENCIES: Record<string, string> = {
   "lucide-react": "0.468.0",
   "framer-motion": "11.15.0",
   clsx: "2.1.1",
+  recharts: "2.15.0",
+  "react-router-dom": "6.28.0",
+  "date-fns": "4.1.0",
 };
 
 export const TAILWIND_CDN = "https://cdn.tailwindcss.com";

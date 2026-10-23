@@ -36,6 +36,13 @@ AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gr
 | `AI_GATEWAY_MODEL` | Valgfri modell, `provider/modell` |
 | `AI_GATEWAY_API_KEY` | Bare utenfor Vercel; på Vercel brukes OIDC automatisk |
 
+## Bilder, fonter og delingsbilde
+
+- **Bildesøk:** chatten har verktøyet `searchImages` (Unsplash, så Pexels, så Pixabay). Legg gratis nøkler i `.env.local` og i Vercel: `UNSPLASH_ACCESS_KEY`, `PEXELS_API_KEY`, `PIXABAY_API_KEY` (illustrasjoner). Uten nøkkel får appene tilfeldige plassholderbilder fra Picsum, og AI-en sier fra om det.
+- **Fonter:** Google Fonts lastes med `@import` øverst i `/styles.css`. Ved publisering flyttes importene foran Tailwind.
+- **Logo, favicon og delingsbilde:** AI-en lager `/brand.json`, `/public/favicon.svg` og `/public/logo.svg`. «Publiser» tegner `og.png` (1200x630) av dem og legger inn meta-tagger.
+- **Flere sider og pakker:** `react-router-dom` (HashRouter), `recharts`, `date-fns`, `lucide-react`, `framer-motion`.
+
 ## Etapper
 
 1. **Fundament** (ferdig): utseende, chat, kodeskriving, live forhåndsvisning, kodevisning, enhetsvisning, «prøv å fikse», historikk, innlogging.

@@ -1,11 +1,14 @@
 const API = "https://api.github.com";
 
+/** Text is sent as UTF-8; `{ base64 }` is a binary file such as a PNG. */
+export type PublishFile = string | { base64: string };
+
 type Options = {
   token: string;
   /** Owner of the repository; defaults to the user the token belongs to. */
   owner?: string | undefined;
   repo: string;
-  files: Record<string, string>;
+  files: Record<string, PublishFile>;
   message: string;
   isPrivate: boolean;
 };
@@ -71,13 +74,23 @@ export async function publishToGitHub({ token, owner, repo, files, message, isPr
   const parent = await call<{ tree?: { sha: string } }>(token, `${base}/git/commits/${parentSha}`);
   if (parent.status !== 200 || !parent.data.tree) throw new GitHubError(explain(parent.status, parent.data));
 
-  // Files are sent inline, so one tree call replaces what would be one request per file.
+  // Text files are sent inline in the tree call. Binary files need a blob of their own first.
+  const entries: { path: string; mode: string; type: string; content?: string; sha?: string }[] = [];
+  for (const [path, file] of Object.entries(files)) {
+    if (typeof file === "string") {
+      entries.push({ path, mode: "100644", type: "blob", content: file });
+      continue;
+    }
+    const blob = await call<{ sha?: string }>(token, `${base}/git/blobs`, {
+      method: "POST",
+      body: JSON.stringify({ content: file.base64, encoding: "base64" }),
+    });
+    if (blob.status !== 201 || !blob.data.sha) throw new GitHubError(explain(blob.status, blob.data));
+    entries.push({ path, mode: "100644", type: "blob", sha: blob.data.sha });
+  }
   const tree = await call<{ sha?: string }>(token, `${base}/git/trees`, {
     method: "POST",
-    body: JSON.stringify({
-      base_tree: parent.data.tree.sha,
-      tree: Object.entries(files).map(([path, content]) => ({ path, mode: "100644", type: "blob", content })),
-    }),
+    body: JSON.stringify({ base_tree: parent.data.tree.sha, tree: entries }),
   });
   if (tree.status !== 201 || !tree.data.sha) throw new GitHubError(explain(tree.status, tree.data));
 

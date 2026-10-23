@@ -1,3 +1,5 @@
+import type { PublishFile } from "@/lib/publish/github";
+
 const API = "https://api.vercel.com";
 
 type Options = {
@@ -6,7 +8,7 @@ type Options = {
   teamId?: string | undefined;
   /** Project name. The same name updates the same project, a new name creates one. */
   name: string;
-  files: Record<string, string>;
+  files: Record<string, PublishFile>;
   onStatus?: (state: string) => void;
 };
 
@@ -52,7 +54,11 @@ export async function deployToVercel({ token, teamId, name, files, onStatus }: O
     body: JSON.stringify({
       name,
       target: "production",
-      files: Object.entries(files).map(([file, content]) => ({ file, data: Buffer.from(content, "utf8").toString("base64"), encoding: "base64" })),
+      files: Object.entries(files).map(([file, content]) => ({
+        file,
+        data: typeof content === "string" ? Buffer.from(content, "utf8").toString("base64") : content.base64,
+        encoding: "base64",
+      })),
       projectSettings: { framework: "vite" },
     }),
   });

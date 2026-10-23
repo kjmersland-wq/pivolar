@@ -1,4 +1,5 @@
-import { PROTECTED_PATHS, type FileMap } from "@/lib/files";
+import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, type FileMap } from "../files.ts";
+import { metaTags, readBrand } from "./brand.ts";
 
 /** Lowercase, URL-safe name that works as a GitHub repo name and a Vercel project name. */
 export function slugify(name: string): string {
@@ -27,9 +28,7 @@ const PACKAGE_JSON = (name: string) =>
       dependencies: {
         react: "^19.0.0",
         "react-dom": "^19.0.0",
-        "lucide-react": "0.468.0",
-        "framer-motion": "11.15.0",
-        clsx: "2.1.1",
+        ...SANDBOX_DEPENDENCIES,
       },
       devDependencies: {
         "@tailwindcss/vite": "^4.1.0",
@@ -49,8 +48,17 @@ const VITE_CONFIG = `import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// The share image needs an absolute address. Vercel exposes the production domain while building.
+function siteUrl() {
+  return {
+    name: "site-url",
+    transformIndexHtml: (html: string) =>
+      html.replaceAll("__SITE_URL__", process.env.VERCEL_PROJECT_PRODUCTION_URL ? "https://" + process.env.VERCEL_PROJECT_PRODUCTION_URL : ""),
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), siteUrl()],
 });
 `;
 
@@ -87,6 +95,21 @@ createRoot(document.getElementById("root")!).render(
 );
 `;
 
+/**
+ * Remote @import lines (Google Fonts) must come before every other rule. The preview wants them at
+ * the top of styles.css; here Tailwind's own import is added, so they are moved in front of it.
+ */
+export function buildStyles(css: string): string {
+  const remote: string[] = [];
+  const rest = css.replace(/^[ \t]*@import\s+url\([^)]*\)[^;\n]*;?[ \t]*$/gm, (line) => {
+    const trimmed = line.trim();
+    remote.push(trimmed.endsWith(";") ? trimmed : trimmed + ";");
+    return "";
+  });
+  const head = remote.length ? remote.join("\n") + "\n" : "";
+  return head + '@import "tailwindcss";\n\n' + rest.trim() + "\n";
+}
+
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 /**
@@ -96,6 +119,7 @@ const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ "&": "&am
  */
 export function buildDeployableProject(files: FileMap, title: string): Record<string, string> {
   const slug = slugify(title);
+  const brand = readBrand(files, title);
   const out: Record<string, string> = {
     "package.json": PACKAGE_JSON(slug),
     "vite.config.ts": VITE_CONFIG,
@@ -105,7 +129,8 @@ export function buildDeployableProject(files: FileMap, title: string): Record<st
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${escapeHtml(title)}</title>
+    <title>${escapeHtml(brand.name || title)}</title>
+    ${metaTags(brand, title)}
   </head>
   <body>
     <div id="root"></div>
@@ -122,9 +147,10 @@ export function buildDeployableProject(files: FileMap, title: string): Record<st
     if (PROTECTED_PATHS.has(path)) continue;
     const relative = path.replace(/^\/+/, "");
     if (relative === "styles.css") continue;
-    out[`src/${relative}`] = code;
+    // Files under /public are served as they are (favicon, logo); everything else is source code.
+    out[relative.startsWith("public/") ? relative : `src/${relative}`] = code;
   }
-  out["src/styles.css"] = `@import "tailwindcss";\n\n${files["/styles.css"] ?? ""}`;
+  out["src/styles.css"] = buildStyles(files["/styles.css"] ?? "");
 
   if (!out["src/App.tsx"]) throw new Error("Prosjektet mangler /App.tsx.");
   return out;

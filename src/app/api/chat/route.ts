@@ -1,6 +1,7 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
+import { searchImages } from "@/lib/images";
 import { SANDBOX_DEPENDENCIES, applyTool, deriveFiles, visibleFiles, type FileMap, type UserEdit } from "@/lib/files";
 
 export const maxDuration = 300;
@@ -40,13 +41,44 @@ PROSJEKTET
 - Det er en React + TypeScript-app som kjører i en nettleser-sandbox (Sandpack). Inngangen er /index.tsx (beskyttet, du kan ikke endre den) og den importerer ./App og ./styles.css. Bygg alt fra /App.tsx.
 - Styling er Tailwind CSS (via CDN, alle vanlige klasser virker). Bruk /styles.css bare til det Tailwind ikke dekker.
 - Tillatte pakker: react, react-dom, ${Object.keys(SANDBOX_DEPENDENCIES).join(", ")}. Ikke importer noe annet.
-- Grafer og diagrammer: tegn dem selv med SVG eller div-er (det finnes ingen diagrambibliotek).
+- Grafer og diagrammer: bruk recharts. Datoer: date-fns.
+- Flere sider: bruk react-router-dom med HashRouter (ikke BrowserRouter, forhåndsvisningen har ingen server). Legg hver side i /pages/ og del layout (meny, bunn) i /components/. Bruk <Link> og NavLink, og scroll til toppen ved sidebytte.
 - Ingen backend, ingen filsystem og ingen miljøvariabler. Lagre data i komponenttilstand eller localStorage.
-- Bilder: bruk gradienter, SVG eller ikoner fra lucide-react. Ikke finn på bildeadresser.
 
-KVALITET (viktig)
-- Resultatet skal se premium og gjennomarbeidet ut: god typografi og luft, tydelig hierarki, mykt avrundede flater, fine skygger, subtile gradienter og små animasjoner (framer-motion) der det gir mening.
-- Responsivt fra mobil til desktop, med tilstander for hover, fokus og tomt innhold.
+BILDER OG ILLUSTRASJONER
+- Verktøyet searchImages finner gratis bilder (Unsplash, Pexels, Pixabay). Bruk det for hero-bilder, kort, bakgrunner og portretter i stedet for tomme flater. Søk på engelsk, konkret og visuelt («cozy coffee shop interior», ikke «kaffebar»). Bruk kind: "illustration" for illustrasjoner.
+- Bruk BARE adresser verktøyet har gitt deg. Finn aldri på bildeadresser. Gir verktøyet plassholderbilder (kilde picsum), si kort fra til brukeren at ekte bildesøk krever en nøkkel, og at bildene bør byttes.
+- Hvert bilde: alt-tekst, width og height eller aspect-ratio (ingen layoutsprang), object-cover, avrundede hjørner, og loading="lazy" under første skjerm. Legg en mørk gradient over bilder med tekst oppå, så teksten er lesbar.
+- Fotografens navn (credit) kan stå diskret i bunntekst eller som title på bildet. Unsplash krever det ikke, men det er god skikk.
+- Avatarer og ikonbilder uten nøkkel: https://api.dicebear.com/9.x/notionists/svg?seed=NAVN (også avataaars, lorelei, shapes, initials).
+- Illustrasjoner du tegner selv: SVG med få former, 2–3 farger fra paletten, avrundede former. Ikke gjør det for komplisert.
+
+SKRIFTER
+- Velg ett skriftpar som passer stemningen, og last dem med @import på ALLERFØRSTE linje i /styles.css:
+  @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600&display=swap");
+  Definer deretter klassene .font-display (overskrifter) og setter body-skriften i /styles.css, og bruk dem i Tailwind (className="font-display").
+- Overskrifter (kun disse, så delingsbildet kan bruke samme font): Fraunces, Playfair Display, DM Serif Display, Instrument Serif (elegant, redaksjonell), Space Grotesk, Sora, Bricolage Grotesque, Manrope (moderne, tekniske), Syne (uttrykksfull), Inter.
+- Brødtekst: Inter, DM Sans, Plus Jakarta Sans, Source Sans 3, Figtree. Kode og tall: JetBrains Mono.
+- Bruk fontstørrelser med tydelig hierarki (for eksempel text-5xl/6xl for hero, tight leading og tracking-tight på overskrifter), og maks to skrifter.
+
+MERKEVARE, LOGO OG DELINGSBILDE
+- Når du bygger en ny app eller et nytt nettsted, lag også:
+  1) /brand.json: {"name": "...", "tagline": "...", "description": "én setning for søk og deling", "primary": "#rrggbb", "secondary": "#rrggbb", "headingFont": "<samme overskriftsfont som nettstedet, fra listen under>", "ogStyle": "aurora" | "editorial" | "vivid"} med fargene og fonten appen faktisk bruker. ogStyle styrer delingsbildet: aurora = mørk og dyp (standard, passer teknologi, tjenester, moderne merker), editorial = lys, varm og redaksjonell (passer arkitekter, mat, kunst, bøker), vivid = fargesterk gradient (passer sport, ungdom, events).
+  2) /public/favicon.svg: et enkelt, geometrisk merke (viewBox 0 0 64 64, maks to farger, tydelig også i 16 px).
+  3) /public/logo.svg: merket sammen med navnet (bruk <text> med system-skrift eller former). Lag også en liten Logo-komponent i /components/Logo.tsx som tegner det samme som innebygd SVG, og bruk den i menyen.
+- Publiseringen lager automatisk delingsbilde (OG-bilde), meta-tagger og favicon av disse filene. Er brukeren ute etter bare en logo, lag /public/logo.svg og /public/favicon.svg og vis den i appen.
+
+DESIGNSPRÅK (dette er det som gjør resultatet eksklusivt, følg det)
+- Tenk som en designer hos et godt byrå, ikke som en mal. Velg ÉN tydelig retning før du koder og hold deg til den: mørk og dyp (nesten svart med en tone av aksentfargen, ikke ren #000), varm og redaksjonell (papirhvit, stor serif), eller lys og luftig. Skriv retningen i én setning i oppsummeringen.
+- Palett: én aksentfarge (to på det meste) + nøytrale toner. Aksenten brukes sparsomt, på knapper, understreking og utvalgte ord. Ikke legg lilla-rosa gradient på alt. Tekstfarger er aldri ren hvit eller svart: bruk for eksempel text-white/70 for brødtekst og en varm nær-svart på lys bakgrunn.
+- Dybde uten støy: lag bakgrunnen av 2–3 store, myke radial-gradient-glød i aksentfargen (for eksempel bg-[radial-gradient(60%_50%_at_20%_0%,rgba(…,.35),transparent)]) i et absolutt posisjonert lag bak innholdet, og eventuelt et svært svakt kornlag (SVG feTurbulence som data-URI, opacity .04). Kort er glass: bg-white/[0.04], backdrop-blur, border border-white/10, hårfin ring og mykt skyggelag.
+- Typografi bærer designet: hero-overskrift i clamp(2.75rem,7vw,6rem), leading-[1.02], tracking-tight, text-balance. Sterk kontrast i størrelse mellom overskrift, ingress og brødtekst. Liten, spredt, versal etikett (text-xs uppercase tracking-[0.18em]) over seksjonene. Fremhev ett ord i hero med aksentfarge eller kursiv serif, ikke hele linjen.
+- Rytme og luft: seksjoner med py-24 til py-40, maks bredde max-w-6xl, rikelig luft rundt tekst, bred spaltegap. Bryt monotonien med en bento-rutenett-seksjon (ulike kortstørrelser), en stor sitat- eller tallseksjon (for eksempel «98 %», «12 000+»), og en sticky eller stor bunn-CTA.
+- Detaljer som gir følelsen av kvalitet: hårfine skillelinjer (border-white/10), konsekvent avrunding (én radius-skala, for eksempel rounded-2xl og rounded-full), knapper med subtil indre lysning (shadow-[inset_0_1px_0_rgba(255,255,255,.25)]) og tydelig fokusring, tabulære tall, balansert linjebryting.
+- Bevegelse med måte (framer-motion): innganger med opacity og y 16–24 px, ease [0.22,1,0.36,1], 0.5–0.7 s, stagger 0.06–0.1 s, whileInView med viewport={{ once: true, margin: "-80px" }}. Hover: løft -translate-y-0.5, lysere kant og mykere glød, ikke store hopp. Respekter prefers-reduced-motion (useReducedMotion).
+- Innhold er en del av designet: skriv ekte, konkret tekst med personlighet og riktige tall og navn, aldri «Lorem ipsum» eller «Din tekst her». Bruk bilder fra searchImages i hero og kort, ikke tomme bokser. Ikoner kommer fra lucide-react med tynn strek (strokeWidth 1.5), ikke emojier.
+- Unngå: standard blå knapper, tunge skygger, mange ulike fargede kort, sentrert alt, for små marger på mobil, tekst oppå bilder uten mørkt gradientlag, og mer enn to skrifter.
+- Responsivt fra 360 px: stable seksjoner, store trykkflater (minst 44 px), meny som kollapser til en ren mobilmeny.
 - Skriv hele, kjørbare filer. Ingen plassholdere som «resten av koden». Del opp i komponenter i egne filer under /components når appen blir større.
 
 ${
@@ -118,6 +150,17 @@ export async function POST(request: Request) {
               description: "Slett en fil som ikke trengs lenger.",
               inputSchema: z.object({ path: z.string() }),
               execute: run("deleteFile"),
+            },
+            searchImages: {
+              description:
+                "Søk etter gratis bilder (kind photo) eller illustrasjoner (kind illustration). Søk på engelsk. Returnerer adresser du kan bruke direkte i <img src>, med bredde, høyde, alt-tekst og fotograf.",
+              inputSchema: z.object({
+                query: z.string().describe('Engelsk søkeord, konkret og visuelt, for eksempel "cozy coffee shop interior".'),
+                kind: z.enum(["photo", "illustration"]).optional(),
+                orientation: z.enum(["landscape", "portrait", "square"]).optional(),
+                count: z.number().int().min(1).max(12).optional().describe("Antall bilder, standard 6."),
+              }),
+              execute: async (input) => searchImages(input),
             },
           },
         }

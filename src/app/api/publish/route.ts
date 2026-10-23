@@ -1,5 +1,7 @@
 import { PROTECTED_PATHS, type FileMap } from "@/lib/files";
-import { publishToGitHub } from "@/lib/publish/github";
+import { readBrand } from "@/lib/publish/brand";
+import { publishToGitHub, type PublishFile } from "@/lib/publish/github";
+import { renderOgImage } from "@/lib/publish/og";
 import { buildDeployableProject, slugify } from "@/lib/publish/project";
 import { deployToVercel } from "@/lib/publish/vercel";
 
@@ -49,7 +51,10 @@ export async function POST(request: Request) {
 
       try {
         if (Object.keys(files).length === 0) throw new Error("Prosjektet har ingen filer å publisere.");
-        const project = buildDeployableProject(files, title);
+        const project: Record<string, PublishFile> = buildDeployableProject(files, title);
+        // The share image is drawn from /brand.json and the logo. Without them it uses the title and default colours.
+        const og = await renderOgImage(readBrand(files, title));
+        project["public/og.png"] = { base64: Buffer.from(og).toString("base64") };
         send({ step: "project", status: "done", files: Object.keys(project).length });
 
         if (body.dryRun) {
