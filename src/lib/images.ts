@@ -94,6 +94,22 @@ async function pixabay(fetcher: Fetcher, key: string, query: string, kind: Image
   }));
 }
 
+/**
+ * A shorter version of a long search: punctuation and filler removed, the first four words kept.
+ * Null when the search is already short enough that cutting it would change its meaning.
+ */
+export function shorten(query: string): string | null {
+  const filler = new Set(["a", "an", "the", "of", "in", "on", "at", "with", "and", "or", "for", "to", "very", "really", "some"]);
+  const words = query
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((word) => word && !filler.has(word));
+  if (words.length <= 3 && !/[^\p{L}\p{N}\s]/u.test(query)) return null;
+  const cut = words.slice(0, 4).join(" ");
+  return cut && cut !== query.toLowerCase() ? cut : null;
+}
+
 /** Stable, keyword-seeded placeholders for when no image service has a key. Not related to the query. */
 function placeholders(query: string, orientation: string, count: number): ImageHit[] {
   const [width, height] = orientation === "portrait" ? [1000, 1500] : orientation === "square" ? [1200, 1200] : [1600, 1000];
@@ -129,16 +145,18 @@ export async function searchImages(input: Input, env: Env = process.env, fetcher
   }
 
   const tried: string[] = [];
-  const sources: [string, (() => Promise<ImageHit[] | null>) | null][] = [
-    ["Unsplash", env.UNSPLASH_ACCESS_KEY ? () => unsplash(fetcher, env.UNSPLASH_ACCESS_KEY!, query, orientation, count) : null],
-    ["Pexels", env.PEXELS_API_KEY ? () => pexels(fetcher, env.PEXELS_API_KEY!, query, orientation, count) : null],
-    ["Pixabay", env.PIXABAY_API_KEY ? () => pixabay(fetcher, env.PIXABAY_API_KEY!, query, "photo", orientation, count) : null],
+  const sources: [string, ((q: string) => Promise<ImageHit[] | null>) | null][] = [
+    ["Unsplash", env.UNSPLASH_ACCESS_KEY ? (q) => unsplash(fetcher, env.UNSPLASH_ACCESS_KEY!, q, orientation, count) : null],
+    ["Pexels", env.PEXELS_API_KEY ? (q) => pexels(fetcher, env.PEXELS_API_KEY!, q, orientation, count) : null],
+    ["Pixabay", env.PIXABAY_API_KEY ? (q) => pixabay(fetcher, env.PIXABAY_API_KEY!, q, "photo", orientation, count) : null],
   ];
+  const shorter = shorten(query);
   for (const [name, run] of sources) {
     if (!run) continue;
     tried.push(name);
-    const found = await run();
-    if (found) return { ok: true, message: `Fant ${found.length} bilder fra ${found[0]!.source === "unsplash" ? "Unsplash" : name}.`, images: found };
+    // Long, descriptive searches often return nothing, so a shorter one is tried before moving on.
+    const found = (await run(query)) ?? (shorter ? await run(shorter) : null);
+    if (found) return { ok: true, message: `Fant ${found.length} bilder fra ${name}.`, images: found };
   }
 
   const reason = tried.length ? `Ingen treff hos ${tried.join(" og ")}.` : "Ingen bildetjeneste er satt opp (UNSPLASH_ACCESS_KEY, PEXELS_API_KEY eller PIXABAY_API_KEY).";

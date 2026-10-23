@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { searchImages } from "../src/lib/images.ts";
+import { searchImages, shorten } from "../src/lib/images.ts";
 
 /** A fetcher that answers by URL prefix and records what was asked. */
 function fake(routes: Record<string, unknown | null>) {
@@ -91,6 +91,36 @@ const pixabayBody = {
   await searchImages({ query: "x".repeat(300), count: 99 }, { PEXELS_API_KEY: "k" }, fetcher);
   assert.match(calls[0]!.url, /per_page=12/);
   assert.ok(decodeURIComponent(calls[0]!.url.split("query=")[1]!.split("&")[0]!).length === 100);
+}
+
+// --- shorten: long descriptive searches are cut down, short ones are left alone
+assert.equal(shorten("dimly lit blues club stage, warm light"), "dimly lit blues club");
+assert.equal(shorten("a cozy coffee shop interior with plants"), "cozy coffee shop interior");
+assert.equal(shorten("blues club"), null, "already short");
+assert.equal(shorten("coffee shop"), null);
+assert.equal(shorten("sunset, beach"), "sunset beach", "punctuation alone is worth a retry");
+assert.equal(shorten("!!!"), null);
+
+// --- a long search that finds nothing is retried shorter at the same provider before falling through
+{
+  const asked: string[] = [];
+  const fetcher = async (url: string) => {
+    const q = decodeURIComponent(new URL(url).searchParams.get("query") ?? "");
+    asked.push(q);
+    return new Response(JSON.stringify(q === "dimly lit blues club" ? unsplashBody : { results: [] }), { status: 200 });
+  };
+  const result = await searchImages({ query: "dimly lit blues club stage, warm light" }, { UNSPLASH_ACCESS_KEY: "k1", PEXELS_API_KEY: "k2" }, fetcher);
+  assert.equal(result.images[0]!.source, "unsplash", "found by the shorter search, so Pexels is never asked");
+  assert.deepEqual(asked, ["dimly lit blues club stage, warm light", "dimly lit blues club"]);
+  assert.match(result.message, /Unsplash/);
+}
+{
+  // nothing found at either length: falls through to the next provider
+  const asked: string[] = [];
+  const fetcher = async (url: string) => (asked.push(new URL(url).hostname), new Response(JSON.stringify(url.includes("pexels") ? pexelsBody : { results: [] }), { status: 200 }));
+  const result = await searchImages({ query: "very long and detailed description of a misty forest at dawn" }, { UNSPLASH_ACCESS_KEY: "k1", PEXELS_API_KEY: "k2" }, fetcher);
+  assert.equal(result.images[0]!.source, "pexels");
+  assert.deepEqual(asked, ["api.unsplash.com", "api.unsplash.com", "api.pexels.com"]);
 }
 
 console.log("images: all ok");
