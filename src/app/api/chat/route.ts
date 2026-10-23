@@ -1,7 +1,9 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
+import { convertToModelMessages, createUIMessageStreamResponse, generateImage, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
+import { createImageTool } from "@/lib/image-gen";
 import { searchImages } from "@/lib/images";
+import { createClient } from "@/lib/supabase/server";
 import { SANDBOX_DEPENDENCIES, applyTool, deriveFiles, visibleFiles, type FileMap, type UserEdit } from "@/lib/files";
 
 export const maxDuration = 300;
@@ -46,6 +48,13 @@ PROSJEKTET
 - Ingen backend, ingen filsystem og ingen miljøvariabler. Lagre data i komponenttilstand eller localStorage.
 
 BILDER OG ILLUSTRASJONER
+- To verktøy: searchImages finner ekte, gratis bilder (fotografier), generateImage lager helt egne bilder med en bildemodell. Velg riktig verktøy:
+  * Ekte miljø, mennesker, mat, steder, natur: searchImages.
+  * Merkevareeget, stemning som ikke finnes som foto, emblemer, logoer med illustrasjon, hero-scener, illustrasjoner, teksturer: generateImage.
+- generateImage koster penger og tar 10–30 sekunder. Lag bare de bildene som gjør størst forskjell (typisk hero og eventuelt ett emblem), maks 3 per melding, og bruk bildene om igjen i stedet for å lage flere like.
+- Skriv beskrivelsen (prompt) på engelsk og detaljert: motiv, komposisjon, lys, stemning, fargepalett (bruk nettstedets hex-farger), stil (for eksempel «vintage engraved badge», «cinematic photograph, 35mm», «flat editorial illustration»). Be om rolig plass der overskriften skal ligge i hero-bilder. Ingen tekst i bildet, unntatt i emblemer der navnet er en del av merket (skriv ordene nøyaktig og kort).
+- kind: hero (bred scene), emblem (logo/merke på ensfarget bakgrunn), illustration, texture (bakgrunnsstruktur), portrait. For emblemer: legg det i hjørnet av hero eller i menyen som et lite, avrundet merke, og gi det plass. Bakgrunnen er ensfarget, ikke gjennomsiktig, så plasser det på en flate med samme farge eller bruk avrundet maske.
+- Bruk adressen verktøyet gir i <img src> eller bakgrunnsbilde. Adressen er varig og følger med når prosjektet publiseres. Svarer verktøyet med ok: false, les meldingen, og bruk searchImages eller en CSS-gradient i stedet. Ikke prøv igjen med samme beskrivelse.
 - Verktøyet searchImages finner gratis bilder (Unsplash, Pexels, Pixabay). Bruk det for hero-bilder, kort, bakgrunner og portretter i stedet for tomme flater. Søk på engelsk, konkret og visuelt («cozy coffee shop interior», ikke «kaffebar»). Bruk kind: "illustration" for illustrasjoner.
 - Bruk BARE adresser verktøyet har gitt deg. Finn aldri på bildeadresser. Gir verktøyet plassholderbilder (kilde picsum), si kort fra til brukeren at ekte bildesøk krever en nøkkel, og at bildene bør byttes.
 - Hvert bilde: alt-tekst, width og height eller aspect-ratio (ingen layoutsprang), object-cover, avrundede hjørner, og loading="lazy" under første skjerm. Legg en mørk gradient over bilder med tekst oppå, så teksten er lesbar.
@@ -119,6 +128,29 @@ export async function POST(request: Request) {
   // The tools work on a copy of the project, so a later tool call in the same answer sees earlier ones.
   const working: FileMap = deriveFiles(messages, edits);
 
+  // One request may make a few pictures; they are stored under the signed-in user's own folder.
+  const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const imageModel = process.env.IMAGE_MODEL ?? "google/imagen-4.0-generate-001";
+  const generateImageTool = auth.user
+    ? createImageTool({
+        model: imageModel,
+        userId: auth.user.id,
+        newId: () => crypto.randomUUID(),
+        generate: async ({ model, prompt, aspectRatio, size }) => {
+          // OpenAI models take a pixel size, the others an aspect ratio.
+          const { image } = await generateImage({ model, prompt, ...(model.startsWith("openai/") ? { size: size as `${number}x${number}` } : { aspectRatio }) });
+          return { bytes: image.uint8Array, mediaType: image.mediaType };
+        },
+        upload: async ({ path, bytes, mediaType }) => {
+          const storage = supabase.storage.from("pivolar-images");
+          const { error } = await storage.upload(path, bytes, { contentType: mediaType, upsert: false });
+          if (error) throw error;
+          return storage.getPublicUrl(path).data.publicUrl;
+        },
+      })
+    : null;
+
   const run = (tool: string) => async (input: Record<string, unknown>) => applyTool(working, tool, input);
 
   const result = streamText({
@@ -151,6 +183,21 @@ export async function POST(request: Request) {
               inputSchema: z.object({ path: z.string() }),
               execute: run("deleteFile"),
             },
+            ...(generateImageTool
+              ? {
+                  generateImage: {
+                    description:
+                      "Lag et eget bilde med en bildemodell (hero-scene, emblem/logo, illustrasjon, tekstur, portrett). Tar 10–30 sekunder og koster penger, så bruk det med måte. Returnerer en varig adresse til bildet.",
+                    inputSchema: z.object({
+                      prompt: z.string().describe("Detaljert beskrivelse på engelsk: motiv, komposisjon, lys, stemning, farger, stil."),
+                      kind: z.enum(["hero", "emblem", "illustration", "texture", "portrait"]),
+                      aspectRatio: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional().describe("Standard følger kind: hero 16:9, emblem 1:1."),
+                      alt: z.string().optional().describe("Kort alt-tekst på språket til appen."),
+                    }),
+                    execute: generateImageTool,
+                  },
+                }
+              : {}),
             searchImages: {
               description:
                 "Søk etter gratis bilder (kind photo) eller illustrasjoner (kind illustration). Søk på engelsk. Returnerer adresser du kan bruke direkte i <img src>, med bredde, høyde, alt-tekst og fotograf.",

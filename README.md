@@ -39,6 +39,7 @@ AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gr
 ## Bilder, fonter og delingsbilde
 
 - **Bildesøk:** chatten har verktøyet `searchImages` (Unsplash, så Pexels, så Pixabay). Legg gratis nøkler i `.env.local` og i Vercel: `UNSPLASH_ACCESS_KEY`, `PEXELS_API_KEY`, `PIXABAY_API_KEY` (illustrasjoner). Uten nøkkel får appene tilfeldige plassholderbilder fra Picsum, og AI-en sier fra om det.
+- **Egne bilder:** verktøyet `generateImage` lager emblemer, hero-scener, illustrasjoner og teksturer med en bildemodell via AI Gateway (`IMAGE_MODEL`, standard `google/imagen-4.0-generate-001`). Bildene lagres i Supabase Storage (bucket `pivolar-images`, migrasjon `20261023160000_pivolar_images.sql`) og kopieres inn i prosjektet ved publisering. Maks 3 per melding.
 - **Fonter:** Google Fonts lastes med `@import` øverst i `/styles.css`. Ved publisering flyttes importene foran Tailwind.
 - **Logo, favicon og delingsbilde:** AI-en lager `/brand.json`, `/public/favicon.svg` og `/public/logo.svg`. «Publiser» tegner `og.png` (1200x630) av dem og legger inn meta-tagger.
 - **Flere sider og pakker:** `react-router-dom` (HashRouter), `recharts`, `date-fns`, `lucide-react`, `framer-motion`.

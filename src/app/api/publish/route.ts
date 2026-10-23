@@ -2,6 +2,7 @@ import { PROTECTED_PATHS, type FileMap } from "@/lib/files";
 import { readBrand } from "@/lib/publish/brand";
 import { publishToGitHub, type PublishFile } from "@/lib/publish/github";
 import { renderOgImage } from "@/lib/publish/og";
+import { bundleStorageImages } from "@/lib/publish/storage-images";
 import { buildDeployableProject, slugify } from "@/lib/publish/project";
 import { deployToVercel } from "@/lib/publish/vercel";
 
@@ -51,7 +52,9 @@ export async function POST(request: Request) {
 
       try {
         if (Object.keys(files).length === 0) throw new Error("Prosjektet har ingen filer å publisere.");
-        const project: Record<string, PublishFile> = buildDeployableProject(files, title);
+        // Pictures generated in Pivolar are copied into the project, so the site does not depend on Pivolar's storage.
+        const bundled = await bundleStorageImages(files, process.env.NEXT_PUBLIC_SUPABASE_URL);
+        const project: Record<string, PublishFile> = { ...buildDeployableProject(bundled.files, title), ...bundled.images };
         // The share image is drawn from /brand.json and the logo. Without them it uses the title and default colours.
         const og = await renderOgImage(readBrand(files, title));
         project["public/og.png"] = { base64: Buffer.from(og).toString("base64") };
