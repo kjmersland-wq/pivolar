@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createImageTool } from "@/lib/image-gen";
 import { searchImages } from "@/lib/images";
 import { createClient } from "@/lib/supabase/server";
+import { logChatUsage, logImageUsage } from "@/lib/usage/log";
 import { SANDBOX_DEPENDENCIES, applyTool, deriveFiles, visibleFiles, type FileMap, type UserEdit } from "@/lib/files";
 
 export const maxDuration = 300;
@@ -140,6 +141,7 @@ export async function POST(request: Request) {
         generate: async ({ model, prompt, aspectRatio, size }) => {
           // OpenAI models take a pixel size, the others an aspect ratio.
           const { image } = await generateImage({ model, prompt, ...(model.startsWith("openai/") ? { size: size as `${number}x${number}` } : { aspectRatio }) });
+          if (auth.user) await logImageUsage(supabase, auth.user.id);
           return { bytes: image.uint8Array, mediaType: image.mediaType };
         },
         upload: async ({ path, bytes, mediaType }) => {
@@ -158,6 +160,10 @@ export async function POST(request: Request) {
     instructions: systemPrompt(working, mode),
     messages: await convertToModelMessages(withoutEmptyImages(messages)),
     stopWhen: isStepCount(25),
+    // Every finished request is added to the usage meter. The server keeps running when the browser stops waiting, so it is still counted.
+    onEnd: async ({ usage }) => {
+      if (auth.user) await logChatUsage(supabase, auth.user.id, usage);
+    },
     ...(mode === "build"
       ? {
           tools: {

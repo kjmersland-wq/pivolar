@@ -6,16 +6,22 @@ import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
 import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Monitor, MousePointerClick, Rocket, Smartphone, Tablet } from "lucide-react";
+import { BudgetDialog } from "@/components/BudgetDialog";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { ComposeDialog } from "@/components/ComposeDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { Logo } from "@/components/Logo";
 import { PublishDialog } from "@/components/PublishDialog";
+import { QueuedBar } from "@/components/QueuedBar";
 import { Sandbox, type Device, type PickedElement, type View } from "@/components/Preview";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UsageMeter } from "@/components/UsageMeter";
 import { deriveFiles, type UserEdit } from "@/lib/files";
 import { getProject, loadEdits, loadMessages, saveEdits, saveMessages, takePendingPrompt, updateProject } from "@/lib/projects";
+import { addQueued, loadQueued, removeQueued } from "@/lib/queued";
 import { pullOne } from "@/lib/sync";
+import { fetchUsage, invalidateUsage } from "@/lib/usage/client";
+import type { Budget } from "@/lib/usage/summary";
 import { cn } from "@/lib/utils";
 
 function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (value: T) => void; options: { value: T; label?: string; icon: typeof Eye }[] }) {
@@ -68,6 +74,24 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const { messages, sendMessage, status, stop, setMessages, error } = useChat({ id, messages: initialMessages, transport });
   const busy = status === "submitted" || status === "streaming";
 
+  // Every message goes through the budget check. A used-up budget never blocks for good: the owner
+  // chooses to keep the message for later or to delete it. If the meter cannot be read, the message is sent.
+  type Outgoing = { text: string; files?: FileUIPart[] };
+  const [blocked, setBlocked] = useState<{ payload: Outgoing; budget: Budget } | null>(null);
+  const [queued, setQueued] = useState(() => loadQueued(id));
+  const guarded = useCallback(
+    async (payload: Outgoing) => {
+      const usage = await fetchUsage();
+      if (usage?.budget.level === "over") return setBlocked({ payload, budget: usage.budget });
+      sendMessage(payload);
+    },
+    [sendMessage],
+  );
+  // A finished turn has cost money; refresh the meter once the server has logged it.
+  useEffect(() => {
+    if (!busy) invalidateUsage(1500);
+  }, [busy]);
+
   const files = useMemo(() => deriveFiles(messages, edits), [messages, edits]);
   const messageCount = useRef(messages.length);
   useEffect(() => {
@@ -100,10 +124,10 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
     // the first send. The cleanup cancels the first schedule, so only the settled mount sends.
     const timer = window.setTimeout(() => {
       const prompt = takePendingPrompt(id);
-      if (prompt) sendMessage({ text: prompt });
+      if (prompt) void guarded({ text: prompt });
     }, 50);
     return () => window.clearTimeout(timer);
-  }, [id, initialMessages.length, sendMessage]);
+  }, [id, initialMessages.length, guarded]);
 
   // Name the project after the first request, unless the user already renamed it.
   useEffect(() => {
@@ -119,8 +143,8 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   }, [messages, name, id]);
 
   const send = useCallback(
-    (text: string, attachments: FileUIPart[] = []) => sendMessage(attachments.length > 0 ? { text, files: attachments } : { text }),
-    [sendMessage],
+    (text: string, attachments: FileUIPart[] = []) => guarded(attachments.length > 0 ? { text, files: attachments } : { text }),
+    [guarded],
   );
   const changeElement = useCallback(
     (picked: PickedElement, request: string) => {
@@ -135,17 +159,17 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
       ]
         .filter(Boolean)
         .join("\n");
-      sendMessage({ text: `${request}\n\n<valgt-element>\n${details}\n</valgt-element>` });
+      void guarded({ text: `${request}\n\n<valgt-element>\n${details}\n</valgt-element>` });
     },
-    [sendMessage],
+    [guarded],
   );
   const fix = useCallback(
     (message: string) => {
       setMode("build");
       modeRef.current = "build";
-      sendMessage({ text: `Forhåndsvisningen viser denne feilen. Finn årsaken og rett den:\n\n${message}` });
+      void guarded({ text: `Forhåndsvisningen viser denne feilen. Finn årsaken og rett den:\n\n${message}` });
     },
-    [sendMessage],
+    [guarded],
   );
   const revert = useCallback(
     (messageId: string) => {
@@ -229,6 +253,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
             <Download className="size-3.5" />
             <span className="hidden md:inline">Eksporter</span>
           </button>
+          <UsageMeter />
           <ThemeToggle />
           <button
             type="button"
@@ -243,6 +268,26 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         </div>
       </header>
 
+      <QueuedBar
+        items={queued}
+        onSend={(item) => {
+          setQueued(removeQueued(id, item.id));
+          void guarded({ text: item.text });
+        }}
+        onDelete={(item) => setQueued(removeQueued(id, item.id))}
+      />
+      {blocked && (
+        <BudgetDialog
+          text={blocked.payload.text}
+          hadAttachments={(blocked.payload.files?.length ?? 0) > 0}
+          budget={blocked.budget}
+          onSave={() => {
+            setQueued(addQueued(id, blocked.payload.text, (blocked.payload.files?.length ?? 0) > 0));
+            setBlocked(null);
+          }}
+          onDiscard={() => setBlocked(null)}
+        />
+      )}
       <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} onCompose={compose} initialName={name} />
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={id} name={name} files={files} />
       <PublishDialog open={publishOpen} onClose={() => setPublishOpen(false)} projectId={id} projectName={name} files={files} />

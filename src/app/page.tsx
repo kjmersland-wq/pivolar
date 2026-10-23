@@ -4,6 +4,7 @@ import { Logo } from "@/components/Logo";
 import { ProjectGrid } from "@/components/ProjectGrid";
 import { PromptBox } from "@/components/PromptBox";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UsageMeter } from "@/components/UsageMeter";
 
 export default function Home() {
   return (
@@ -11,6 +12,7 @@ export default function Home() {
       <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
         <Logo />
         <div className="flex items-center gap-1">
+          <UsageMeter />
           <ThemeToggle />
           <LogOutButton />
         </div>

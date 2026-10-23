@@ -44,6 +44,13 @@ AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gr
 - **Logo, favicon og delingsbilde:** AI-en lager `/brand.json`, `/public/favicon.svg` og `/public/logo.svg`. «Publiser» tegner `og.png` (1200x630) av dem og legger inn meta-tagger.
 - **Flere sider og pakker:** `react-router-dom` (HashRouter), `recharts`, `date-fns`, `lucide-react`, `framer-motion`.
 
+## Forbruk og budsjett
+
+- `/forbruk` viser hva AI-bruken koster (kurve for gjenstående budsjett, forbruk per dag, denne måneden og totalt), med budsjett som påfylt beløp eller per måned og en «jeg har fylt på»-knapp. Måleren i toppen blir gul ved 80 % og rød når budsjettet er brukt opp.
+- Er budsjettet brukt opp, stopper Pivolar ikke. Den spør om meldingen skal lagres til senere (vises som «Lagret melding» i prosjektet) eller slettes.
+- Kostnaden er et estimat fra tokens og en prisliste (`PRICE_*` i `.env.example`). Kortet legges alltid inn hos Anthropic og Vercel, aldri i Pivolar.
+- Trenger migrasjonen `20261023170000_pivolar_usage.sql` i Supabase.
+
 ## Etapper
 
 1. **Fundament** (ferdig): utseende, chat, kodeskriving, live forhåndsvisning, kodevisning, enhetsvisning, «prøv å fikse», historikk, innlogging.
