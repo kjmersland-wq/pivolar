@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 export function LoginForm({ configured, emailRequired }: { configured: boolean; emailRequired: boolean }) {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,8 +19,8 @@ export function LoginForm({ configured, emailRequired }: { configured: boolean; 
       body: JSON.stringify({ email, password }),
     });
     if (response.ok) {
-      router.replace("/");
-      router.refresh();
+      // A full load, so background syncing (started in the layout) begins with the new session.
+      window.location.assign("/");
       return;
     }
     const body = (await response.json().catch(() => ({}))) as { error?: string };

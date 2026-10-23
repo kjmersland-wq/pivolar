@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
 import { startSync } from "@/lib/sync";
 
-/** Keeps projects mirrored to the account while the app is open. Does nothing on the login page. */
+/**
+ * Keeps projects mirrored to the account while the app is open. Does nothing on the login page.
+ * The path is read in the effect rather than with usePathname(), which would block prerendering of every route.
+ */
 export function SyncBoot() {
-  const pathname = usePathname();
-  const onLogin = pathname.startsWith("/login");
-  useEffect(() => (onLogin ? undefined : startSync()), [onLogin]);
+  useEffect(() => (window.location.pathname.startsWith("/login") ? undefined : startSync()), []);
   return null;
 }
