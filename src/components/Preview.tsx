@@ -13,6 +13,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Wand2 } from "lucide-react";
 import { ElementPanel, type Picked } from "@/components/ElementPanel";
 import type { Spec } from "@/lib/analyze/condense";
+import { explainError } from "@/lib/explain/errors";
 import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, TAILWIND_CDN, type FileMap } from "@/lib/files";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -32,28 +33,54 @@ const serialize = (files: FileMap) => JSON.stringify(Object.keys(files).sort().m
 function ErrorCard({ onFix, busy }: { onFix: (message: string) => void; busy: boolean }) {
   const { sandpack } = useSandpack();
   const message = sandpack.error?.message;
+  const explained = useMemo(() => (message ? explainError(message) : null), [message]);
   if (!message) return null;
+  // The raw message goes first, so repeated attempts at the same error are recognised; the reading follows.
+  const fixMessage = explained ? `${message}
+
+Tolkning: ${explained.hint}` : message;
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass absolute inset-x-4 bottom-4 z-10 max-h-[45%] overflow-hidden rounded-2xl p-4 shadow-[var(--shadow)]"
+      className="glass absolute inset-x-4 bottom-4 z-10 max-h-[55%] overflow-auto rounded-2xl p-4 shadow-[var(--shadow)]"
     >
       <div className="flex items-start gap-3">
         <AlertTriangle className="mt-0.5 size-5 shrink-0 text-red-400" />
         <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] font-medium">Forhåndsvisningen feilet</p>
-          <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap font-mono text-[11.5px] text-muted">{message}</pre>
+          {explained ? (
+            <>
+              <p className="text-[13.5px] font-medium">{explained.summary}</p>
+              <p className="mt-1 text-[12.5px] text-muted">{explained.cause}</p>
+              <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px]">
+                {explained.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ul>
+              {explained.where ? <p className="mt-1.5 text-[11.5px] text-muted">Sted: {explained.where}</p> : null}
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[11.5px] text-muted">Teknisk melding</summary>
+                <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap font-mono text-[11.5px] text-muted">{message}</pre>
+              </details>
+            </>
+          ) : (
+            <>
+              <p className="text-[13.5px] font-medium">Forhåndsvisningen feilet</p>
+              <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap font-mono text-[11.5px] text-muted">{message}</pre>
+            </>
+          )}
         </div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onFix(message)}
-          className="bg-brand flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-50"
-        >
-          <Wand2 className="size-3.5" />
-          Prøv å fikse
-        </button>
+        {explained && !explained.aiFixable ? null : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onFix(fixMessage)}
+            className="bg-brand flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-50"
+          >
+            <Wand2 className="size-3.5" />
+            Prøv å fikse
+          </button>
+        )}
       </div>
     </motion.div>
   );
