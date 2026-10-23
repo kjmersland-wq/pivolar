@@ -66,17 +66,17 @@ function Setup({ config }: { config: Config }) {
   if (!config.github) {
     missing.push({
       name: "GITHUB_TOKEN",
-      why: "lar Atelier lage repoet og legge koden der",
-      href: "https://github.com/settings/tokens/new?scopes=repo&description=Atelier",
+      why: "lar Pivolar lage repoet og legge koden der",
+      href: "https://github.com/settings/tokens/new?scopes=repo&description=Pivolar",
       hint: "Åpne lenken, trykk «Generate token» (tillatelsen «repo» er forhåndsvalgt) og kopier nøkkelen.",
     });
   }
   if (!config.vercel) {
     missing.push({
       name: "VERCEL_TOKEN",
-      why: "lar Atelier legge siden ut på Vercel",
+      why: "lar Pivolar legge siden ut på Vercel",
       href: "https://vercel.com/account/tokens",
-      hint: "Lag en nøkkel med navnet «Atelier» og kopier den. Legg også inn VERCEL_TEAM_ID (team_…) hvis prosjektene skal ligge under et team.",
+      hint: "Lag en nøkkel med navnet «Pivolar» og kopier den. Legg også inn VERCEL_TEAM_ID (team_…) hvis prosjektene skal ligge under et team.",
     });
   }
   if (missing.length === 0) return null;
@@ -84,7 +84,7 @@ function Setup({ config }: { config: Config }) {
     <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
       <p className="text-[13.5px] font-medium text-amber-400">Publisering må settes opp én gang</p>
       <p className="text-[12.5px] leading-relaxed text-muted">
-        Legg nøklene som nye linjer i filen <code className="font-mono text-fg">.env.local</code> i prosjektmappen, lagre, og start Atelier på nytt. Nøklene blir værende på din maskin og vises aldri her.
+        Legg nøklene som nye linjer i filen <code className="font-mono text-fg">.env.local</code> i prosjektmappen, lagre, og start Pivolar på nytt. Nøklene blir værende på din maskin og vises aldri her.
       </p>
       <ul className="space-y-2.5">
         {missing.map((item) => (

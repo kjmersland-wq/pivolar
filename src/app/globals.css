@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Atelier design tokens. Dark is the default; [data-theme="light"] swaps the palette. */
+/* Pivolar design tokens. Dark is the default; [data-theme="light"] swaps the palette. */
 :root,
 [data-theme="dark"] {
   --bg: #09090b;

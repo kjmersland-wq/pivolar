@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, authConfigured, verifySession } from "@/lib/auth";
 
-// Atelier is a single-user tool: everything except the login page needs the owner's session cookie.
+// Pivolar is a single-user tool: everything except the login page needs the owner's session cookie.
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname.startsWith("/login") || pathname.startsWith("/api/login")) return NextResponse.next();

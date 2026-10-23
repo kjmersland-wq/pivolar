@@ -47,7 +47,7 @@ export function PromptBox() {
               start(text);
             }
           }}
-          placeholder="Be Atelier om å bygge …"
+          placeholder="Be Pivolar om å bygge …"
           className="block w-full resize-none bg-transparent px-3 py-2.5 text-[16px] leading-relaxed outline-none placeholder:text-faint"
         />
         <div className="flex items-center justify-between px-1 pt-1">

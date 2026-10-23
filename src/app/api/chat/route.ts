@@ -28,7 +28,7 @@ function systemPrompt(files: FileMap, mode: "build" | "chat") {
   const listing = Object.entries(visibleFiles(files))
     .map(([path, content]) => `--- ${path}\n${content}`)
     .join("\n\n");
-  return `Du er Atelier, en erfaren designer og frontend-utvikler som bygger små apper sammen med brukeren.
+  return `Du er Pivolar, en erfaren designer og frontend-utvikler som bygger små apper sammen med brukeren.
 Brukeren skriver vanligvis norsk. Svar på samme språk som brukeren, kort og vennlig, og skriv teksten i selve appen på språket brukeren ber om.
 
 BRUKERENS EGNE ENDRINGER OG BILDER

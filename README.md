@@ -1,4 +1,4 @@
-# Atelier
+# Pivolar
 
 Et privat verktøy for å bygge apper ved å snakke: du beskriver det du vil ha, AI-en skriver React/Tailwind-koden, og du ser resultatet live ved siden av samtalen.
 
@@ -45,7 +45,7 @@ AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gr
 
 «Publiser»-knappen lager et vanlig Vite-prosjekt av appen, legger det i ett commit i et GitHub-repo og deployer det til Vercel. Legg i `.env.local`:
 
-- `GITHUB_TOKEN` (repo-tillatelse): https://github.com/settings/tokens/new?scopes=repo&description=Atelier
+- `GITHUB_TOKEN` (repo-tillatelse): https://github.com/settings/tokens/new?scopes=repo&description=Pivolar
 - `VERCEL_TOKEN`: https://vercel.com/account/tokens
 - Valgfritt: `GITHUB_OWNER`, `VERCEL_TEAM_ID`
 

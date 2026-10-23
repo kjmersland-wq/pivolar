@@ -53,7 +53,7 @@ export async function publishToGitHub({ token, owner, repo, files, message, isPr
     const path = login === me.data.login ? "/user/repos" : `/orgs/${login}/repos`;
     const make = await call(token, path, {
       method: "POST",
-      body: JSON.stringify({ name: repo, private: isPrivate, auto_init: true, description: "Bygget med Atelier" }),
+      body: JSON.stringify({ name: repo, private: isPrivate, auto_init: true, description: "Bygget med Pivolar" }),
     });
     if (make.status !== 201) throw new GitHubError(explain(make.status, make.data));
     created = true;

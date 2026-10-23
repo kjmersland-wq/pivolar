@@ -90,7 +90,7 @@ createRoot(document.getElementById("root")!).render(
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 /**
- * Turns the files Atelier shows in its preview into a normal Vite + React + Tailwind project that
+ * Turns the files Pivolar shows in its preview into a normal Vite + React + Tailwind project that
  * builds on Vercel. Paths move under src/, the sandbox-only files are left out, and Tailwind is
  * installed properly (the preview loads it from a CDN, a real build must not).
  */
@@ -114,7 +114,7 @@ export function buildDeployableProject(files: FileMap, title: string): Record<st
 </html>
 `,
     ".gitignore": "node_modules\ndist\n.env\n.env.*\n.vercel\n",
-    "README.md": `# ${title}\n\nBygget med Atelier.\n\n\`\`\`sh\nnpm install\nnpm run dev\n\`\`\`\n`,
+    "README.md": `# ${title}\n\nBygget med Pivolar.\n\n\`\`\`sh\nnpm install\nnpm run dev\n\`\`\`\n`,
     "src/main.tsx": MAIN_TSX,
   };
 

@@ -24,7 +24,7 @@ export default function Home() {
             Hva vil du <span className="text-brand">bygge</span> i dag?
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-[16px] leading-relaxed text-muted sm:text-[18px]">
-            Beskriv det med dine egne ord. Atelier skriver koden, og du ser resultatet vokse frem ved siden av samtalen.
+            Beskriv det med dine egne ord. Pivolar skriver koden, og du ser resultatet vokse frem ved siden av samtalen.
           </p>
         </section>
 

@@ -36,7 +36,7 @@ type Event =
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Body;
   const files = Object.fromEntries(Object.entries(body.files ?? {}).filter(([path]) => !PROTECTED_PATHS.has(path)));
-  const title = (body.name ?? "").trim() || "Atelier-app";
+  const title = (body.name ?? "").trim() || "Pivolar-app";
   const slug = slugify(title);
   const wantGitHub = body.targets?.github !== false;
   const wantVercel = body.targets?.vercel !== false;
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
                 owner: process.env.GITHUB_OWNER || undefined,
                 repo: slug,
                 files: project,
-                message: "Publisert fra Atelier",
+                message: "Publisert fra Pivolar",
                 isPrivate: body.isPrivate !== false,
               });
               send({ step: "github", status: "done", url: result.url, commitUrl: result.commitUrl, created: result.created });

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node tests/direct-edit.test.mts"
+    "test": "node tests/direct-edit.test.mts && node tests/compose.test.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.86",

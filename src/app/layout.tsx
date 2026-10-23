@@ -6,7 +6,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Atelier — bygg apper ved å snakke",
+  title: "Pivolar — bygg apper ved å snakke",
   description: "Beskriv det du vil lage, og se det bli bygget live.",
 };
 

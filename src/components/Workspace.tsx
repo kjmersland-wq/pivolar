@@ -5,8 +5,9 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { ChevronLeft, Code2, Eye, Monitor, MousePointerClick, Rocket, Smartphone, Tablet } from "lucide-react";
+import { ChevronLeft, Code2, Eye, LayoutTemplate, Monitor, MousePointerClick, Rocket, Smartphone, Tablet } from "lucide-react";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
+import { ComposeDialog } from "@/components/ComposeDialog";
 import { Logo } from "@/components/Logo";
 import { PublishDialog } from "@/components/PublishDialog";
 import { Sandbox, type Device, type PickedElement, type View } from "@/components/Preview";
@@ -47,6 +48,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [name, setName] = useState(initialName);
   const [inspect, setInspect] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
 
   // Code the user typed in the editor. Each edit remembers how many messages existed at that
   // moment, so reverting the chat also reverts the edits that came after.
@@ -75,6 +77,13 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
       return [...prev.filter((edit) => !(edit.at === at && edit.path === path)), { at, path, content }];
     });
   }, []);
+
+  const compose = useCallback(
+    (composed: Record<string, string>) => {
+      for (const [path, content] of Object.entries(composed)) editFile(path, content);
+    },
+    [editFile],
+  );
 
   // Save the chat whenever a turn is finished.
   useEffect(() => {
@@ -198,6 +207,16 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
               ]}
             />
           )}
+          <button
+            type="button"
+            onClick={() => setComposeOpen(true)}
+            disabled={busy}
+            title="Sett sammen en side av ferdige seksjoner, uten AI"
+            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition enabled:hover:text-fg disabled:opacity-50"
+          >
+            <LayoutTemplate className="size-3.5" />
+            <span className="hidden md:inline">Sett sammen</span>
+          </button>
           <ThemeToggle />
           <button
             type="button"
@@ -212,6 +231,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         </div>
       </header>
 
+      <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} onCompose={compose} initialName={name} />
       <PublishDialog open={publishOpen} onClose={() => setPublishOpen(false)} projectId={id} projectName={name} files={files} />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(340px,430px)_1fr]">

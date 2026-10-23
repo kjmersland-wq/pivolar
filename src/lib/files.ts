@@ -28,7 +28,7 @@ root.render(
   </StrictMode>
 );
 `,
-  "/atelier-inspector.js": String.raw`/* Atelier inspector. Lets the editor pick an element in this preview. Hidden from the AI and the user. */
+  "/atelier-inspector.js": String.raw`/* Pivolar inspector. Lets the editor pick an element in this preview. Hidden from the AI and the user. */
 (function () {
   if (window.__atelierInspector) return;
   window.__atelierInspector = true;
