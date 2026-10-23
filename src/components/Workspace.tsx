@@ -5,8 +5,9 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, MousePointerClick, Rocket, ScanSearch, Smartphone, Tablet } from "lucide-react";
+import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, MousePointerClick, Rocket, ScanSearch, ShieldCheck, Smartphone, Tablet } from "lucide-react";
 import { BudgetDialog } from "@/components/BudgetDialog";
+import { CheckDialog } from "@/components/CheckDialog";
 import { LoopDialog } from "@/components/LoopDialog";
 import { CompareDialog } from "@/components/CompareDialog";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
@@ -64,6 +65,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [inspect, setInspect] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [checkOpen, setCheckOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   // The same preview error sent for fixing again and again. After MAX_FIX_ATTEMPTS the owner is asked first.
@@ -280,6 +282,15 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           </button>
           <button
             type="button"
+            onClick={() => setCheckOpen(true)}
+            title="Sjekk koden for rot og sikkerhetshull"
+            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
+          >
+            <ShieldCheck className="size-3.5" />
+            <span className="hidden md:inline">Kontroll</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setExportOpen(true)}
             title="Last ned hele prosjektet som ZIP"
             className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
@@ -365,6 +376,17 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         reference={reference}
         measure={measure}
         busy={busy}
+        onFix={(text) => {
+          setMode("build");
+          modeRef.current = "build";
+          void guarded({ text });
+        }}
+      />
+      <CheckDialog
+        open={checkOpen}
+        files={files}
+        busy={busy}
+        onClose={() => setCheckOpen(false)}
         onFix={(text) => {
           setMode("build");
           modeRef.current = "build";
