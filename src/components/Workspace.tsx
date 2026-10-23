@@ -5,10 +5,11 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, MousePointerClick, Rocket, ScanSearch, ShieldCheck, Smartphone, Tablet } from "lucide-react";
+import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Rocket, ScanSearch, ShieldCheck, Smartphone, Tablet } from "lucide-react";
 import { BudgetDialog } from "@/components/BudgetDialog";
 import { CheckDialog } from "@/components/CheckDialog";
 import { LoopDialog } from "@/components/LoopDialog";
+import { PullRequestDialog } from "@/components/PullRequestDialog";
 import { CompareDialog } from "@/components/CompareDialog";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { ComposeDialog } from "@/components/ComposeDialog";
@@ -20,7 +21,7 @@ import { Sandbox, type Device, type PickedElement, type View } from "@/component
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UsageMeter } from "@/components/UsageMeter";
 import { deriveFiles, type UserEdit } from "@/lib/files";
-import { getProject, loadEdits, loadMessages, saveEdits, saveMessages, takePendingPrompt, updateProject } from "@/lib/projects";
+import { getProject, loadEdits, loadImportInfo, loadMessages, saveEdits, saveMessages, takePendingPrompt, updateProject } from "@/lib/projects";
 import { addQueued, loadQueued, removeQueued } from "@/lib/queued";
 import { pullOne } from "@/lib/sync";
 import { fetchUsage, invalidateUsage } from "@/lib/usage/client";
@@ -66,6 +67,9 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [publishOpen, setPublishOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
+  const [prOpen, setPrOpen] = useState(false);
+  // Set when the project was imported from GitHub; changes can then be sent back as a pull request.
+  const [github] = useState(() => loadImportInfo(id)?.github ?? null);
   const [exportOpen, setExportOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   // The same preview error sent for fixing again and again. After MAX_FIX_ATTEMPTS the owner is asked first.
@@ -280,6 +284,18 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
             <LayoutTemplate className="size-3.5" />
             <span className="hidden md:inline">Sett sammen</span>
           </button>
+          {github && (
+            <button
+              type="button"
+              onClick={() => setPrOpen(true)}
+              disabled={busy}
+              title="Send endringene til GitHub som en pull request"
+              className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition enabled:hover:text-fg disabled:opacity-50"
+            >
+              <GitPullRequest className="size-3.5" />
+              <span className="hidden md:inline">Send til GitHub</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setCheckOpen(true)}
@@ -382,6 +398,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           void guarded({ text });
         }}
       />
+      {github && <PullRequestDialog open={prOpen} github={github} files={files} onClose={() => setPrOpen(false)} />}
       <CheckDialog
         open={checkOpen}
         files={files}

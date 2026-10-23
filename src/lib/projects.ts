@@ -202,7 +202,15 @@ export function saveMessages(id: string, messages: UIMessage[]) {
 }
 
 /** What is known about a project that came from outside, kept for the export manifest. */
-export type ImportInfo = { source: "zip"; fileName: string; at: number; skippedBinaries: string[]; omittedSecrets: string[] };
+export type ImportInfo = {
+  source: "zip" | "github";
+  fileName: string;
+  at: number;
+  skippedBinaries: string[];
+  omittedSecrets: string[];
+  /** Where a GitHub import came from, so changes can be sent back to the same repository. */
+  github?: { owner: string; repo: string; branch: string; sha: string; private: boolean; url: string };
+};
 
 export function loadImportInfo(id: string): ImportInfo | null {
   return read<ImportInfo | null>(importKey(id), null);

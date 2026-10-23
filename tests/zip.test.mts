@@ -26,6 +26,16 @@ const hugeOne = readZip(zip({ "small.txt": "hi", "huge.txt": "a".repeat(2_000_00
 assert.deepEqual(Object.keys(hugeOne.files), ["/small.txt"]);
 assert.ok(hugeOne.skipped.some((s) => s.path === "huge.txt"));
 
+// GitHub-style limits: big data files stay in the repository, and the smallest files are kept first when the total is too big
+{
+  const opts = { fileBytes: 1_000, textBytes: 2_000, skipOverflow: true };
+  const r = readZip(zip({ "src/App.tsx": "a".repeat(900), "src/b.ts": "b".repeat(800), "src/c.ts": "c".repeat(700), "data/big.json": "{" + " ".repeat(5_000) + "}" }), opts);
+  assert.ok(r.skipped.some((x) => x.path === "data/big.json" && /blir i repoet/.test(x.reason)), "big data file is left in the repo");
+  assert.equal(Object.keys(r.files).length, 2, "total limit drops the largest file, not the whole import");
+  assert.ok(!("/src/App.tsx" in r.files) && "/src/c.ts" in r.files && "/src/b.ts" in r.files);
+  assert.throws(() => readZip(zip({ "a.txt": "a".repeat(900), "b.txt": "b".repeat(900), "c.txt": "c".repeat(900) }), { fileBytes: 1_000, textBytes: 2_500 }), ImportError, "without skipOverflow a too-big total still refuses");
+}
+
 // what is kept and what is left out
 const sample = zip({
   "repo-main/package.json": JSON.stringify({ name: "demo", scripts: { build: "next build", postinstall: "node x.js" }, dependencies: { next: "16", stripe: "1", "@supabase/supabase-js": "2" } }),
@@ -58,6 +68,8 @@ assert.ok(report.services.some((s) => s.includes("Stripe")) && report.services.s
 assert.ok(report.risks.some((r) => r.includes("postinstall")));
 assert.equal(report.previewable, false);
 assert.equal(analyze({ "/App.tsx": "x" }).previewable, true);
+assert.match(analyze({ "/package.json": JSON.stringify({ dependencies: { react: "18", vite: "5" } }), "/src/App.tsx": "x" }).previewNote, /forenklet forhåndsvisning/);
+assert.match(analyze({ "/package.json": JSON.stringify({ dependencies: { "@tanstack/react-start": "1", react: "19", vite: "7" } }), "/src/App.tsx": "x" }).previewNote, /ikke vises/);
 assert.equal(analyze({ "/wp-config.php": "<?php" }).framework.id, "wordpress");
 assert.equal(analyze({ "/index.html": "<p>" }).framework.id, "static");
 

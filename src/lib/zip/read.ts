@@ -20,6 +20,19 @@ export const LIMITS = {
 
 export class ImportError extends Error {}
 
+/**
+ * Per-import overrides. A GitHub import leaves big data files (for example 190 KB of JSON per
+ * country) in the repository instead of failing, and keeps as many small code files as fit.
+ */
+export type ReadOptions = {
+  /** Largest single text file kept. Bigger ones are skipped with a note. */
+  fileBytes?: number;
+  /** Total text kept. */
+  textBytes?: number;
+  /** When the total is exceeded, skip the largest files instead of rejecting the whole import. */
+  skipOverflow?: boolean;
+};
+
 export type Skipped = { path: string; reason: string };
 export type SecretWarning = { path: string; kinds: string[]; line: number };
 
@@ -48,7 +61,9 @@ export function checkPath(name: string): { ok: true; path: string } | { ok: fals
   return { ok: true, path: parts.filter((p) => p && p !== ".").join("/") };
 }
 
-export function readZip(data: Uint8Array): ReadResult {
+export function readZip(data: Uint8Array, options: ReadOptions = {}): ReadResult {
+  const fileLimit = options.fileBytes ?? LIMITS.fileBytes;
+  const textLimit = options.textBytes ?? LIMITS.textBytes;
   if (data.length === 0) throw new ImportError("Filen er tom.");
   if (data.length > LIMITS.archiveBytes) throw new ImportError(`Arkivet er for stort (maks ${LIMITS.archiveBytes / 1_000_000} MB).`);
   if (!(data[0] === 0x50 && data[1] === 0x4b)) throw new ImportError("Dette ser ikke ut som en ZIP-fil.");
@@ -99,8 +114,8 @@ export function readZip(data: Uint8Array): ReadResult {
       skipped.push({ path, reason: "binærfil, lagres ikke i Pivolar ennå" });
       continue;
     }
-    if (info.originalSize > LIMITS.fileBytes) {
-      skipped.push({ path, reason: `over ${LIMITS.fileBytes / 1_000_000} MB` });
+    if (info.originalSize > fileLimit) {
+      skipped.push({ path, reason: fileLimit < LIMITS.fileBytes ? `stor datafil (${Math.round(info.originalSize / 1000)} KB), blir i repoet` : `over ${LIMITS.fileBytes / 1_000_000} MB` });
       continue;
     }
     if (info.size > 0 && info.originalSize > 100_000 && info.originalSize / info.size > LIMITS.ratio) {
@@ -126,9 +141,11 @@ export function readZip(data: Uint8Array): ReadResult {
   const secretWarnings: SecretWarning[] = [];
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let bytes = 0;
-  for (const [name, content] of Object.entries(raw)) {
+  // With skipOverflow the smallest files are kept first, so the code survives and the bulk data is what is left out.
+  const ordered = options.skipOverflow ? Object.entries(raw).sort((a, b) => a[1].length - b[1].length) : Object.entries(raw);
+  for (const [name, content] of ordered) {
     const path = wanted.get(name)!;
-    if (content.length > LIMITS.fileBytes) {
+    if (content.length > fileLimit) {
       skipped.push({ path, reason: "større enn oppgitt i arkivet" });
       continue;
     }
@@ -143,10 +160,14 @@ export function readZip(data: Uint8Array): ReadResult {
       skipped.push({ path, reason: "ikke UTF-8-tekst" });
       continue;
     }
-    bytes += content.length;
-    if (bytes > LIMITS.textBytes) {
-      throw new ImportError(`Prosjektet har mer enn ${LIMITS.textBytes / 1_000_000} MB tekst. Større prosjekter støttes først når Pivolar lagrer prosjekter i en database.`);
+    if (bytes + content.length > textLimit) {
+      if (options.skipOverflow) {
+        skipped.push({ path, reason: "passer ikke i prosjektet (for mye tekst), blir i repoet" });
+        continue;
+      }
+      throw new ImportError(`Prosjektet har mer enn ${textLimit / 1_000_000} MB tekst. Større prosjekter støttes først når Pivolar lagrer prosjekter i en database.`);
     }
+    bytes += content.length;
     const hits = scanSecrets(text);
     if (hits.length > 0) secretWarnings.push({ path, kinds: [...new Set(hits.map((h) => h.kind))], line: hits[0]!.line });
     files[`/${path}`] = text;

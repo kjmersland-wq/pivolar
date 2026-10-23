@@ -15,6 +15,7 @@ import { ElementPanel, type Picked } from "@/components/ElementPanel";
 import type { Spec } from "@/lib/analyze/condense";
 import { explainError } from "@/lib/explain/errors";
 import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, TAILWIND_CDN, type FileMap } from "@/lib/files";
+import { mapForSandbox } from "@/lib/sandbox-map";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,8 @@ export type PickedElement = Picked;
 
 const WIDTHS: Record<Device, string> = { desktop: "100%", tablet: "820px", mobile: "390px", wide: "1280px" };
 const WIDE = 1280;
+
+const ignoreEdit = () => {};
 
 const serialize = (files: FileMap) => JSON.stringify(Object.keys(files).sort().map((path) => [path, files[path]]));
 
@@ -132,7 +135,7 @@ type SandboxProps = {
   measureRef?: MutableRefObject<(() => Promise<Spec>) | null>;
 };
 
-export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onElement, onInspectDone, measureRef }: SandboxProps) {
+export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFix, onEdit, onElement, onInspectDone, measureRef }: SandboxProps) {
   const theme = useTheme();
   const frame = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
@@ -140,8 +143,12 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
   const wide = device === "wide";
   const [picked, setPicked] = useState<PickedElement | null>(null);
   const [pickId, setPickId] = useState(0);
-  // Imported projects bring their own package.json and layout, which the sandbox cannot run.
-  const previewable = !("/package.json" in files);
+  // An imported Vite + React project is laid out like the starter for the preview only (see sandbox-map.ts).
+  // Its real files stay as they are, so the code view of such a project is a read-only copy.
+  const mapped = useMemo(() => mapForSandbox(projectFiles), [projectFiles]);
+  const files = mapped?.files ?? projectFiles;
+  // Other imported projects bring a package.json and a layout the sandbox cannot run.
+  const previewable = mapped !== null || !("/package.json" in projectFiles);
 
   const known = useRef(files);
   const snapshot = useRef(serialize(files));
@@ -173,7 +180,8 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
     () => Object.fromEntries(Object.entries(shown).map(([path, code]) => [path, PROTECTED_PATHS.has(path) ? { code, hidden: true } : code])),
     [shown],
   );
-  const customSetup = useMemo(() => ({ dependencies: SANDBOX_DEPENDENCIES }), []);
+  const dependencies = mapped?.dependencies;
+  const customSetup = useMemo(() => ({ dependencies: dependencies ?? SANDBOX_DEPENDENCIES }), [dependencies]);
   const options = useMemo(
     () => ({ externalResources: [TAILWIND_CDN], recompileMode: "delayed" as const, recompileDelay: 350, initMode: "immediate" as const }),
     [],
@@ -246,7 +254,7 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
 
   return (
     <SandpackProvider key={version} template="react-ts" theme={theme} files={sandpackFiles} customSetup={customSetup} options={options} style={{ height: "100%" }}>
-      <EditorBridge known={known} snapshot={snapshot} onEdit={onEdit} />
+      <EditorBridge known={known} snapshot={snapshot} onEdit={mapped ? ignoreEdit : onEdit} />
       {/* One provider for both views keeps the preview running while you look at the code. */}
       <div className={cn("relative h-full", view !== "preview" && "hidden")}>
         <div ref={pane} className={cn("flex h-full items-stretch overflow-auto bg-bg-soft p-0 sm:p-4", wide ? "justify-start overflow-hidden" : "justify-center")}>
@@ -274,7 +282,7 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
           <ElementPanel
             key={pickId}
             picked={picked}
-            files={files}
+            files={projectFiles}
             onFile={onEdit}
             onPicked={setPicked}
             onClose={() => setPicked(null)}
@@ -289,10 +297,11 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
         )}
       </div>
 
-      <div className={cn("h-full", view !== "code" && "hidden")}>
-        <SandpackLayout style={{ height: "100%", border: 0, borderRadius: 0 }}>
+      <div className={cn("flex h-full flex-col", view !== "code" && "hidden")}>
+        {mapped && <p className="shrink-0 border-b border-line bg-surface-2 px-4 py-2 text-[12.5px] text-muted">Dette er en tilpasset kopi som brukes til forhåndsvisningen (stier og importer er justert). Filene i prosjektet endres med chatten.</p>}
+        <SandpackLayout style={{ height: "100%", minHeight: 0, border: 0, borderRadius: 0 }}>
           <SandpackFileExplorer autoHiddenFiles style={{ height: "100%", minWidth: 200, maxWidth: 240 }} />
-          <SandpackCodeEditor showLineNumbers showTabs showInlineErrors style={{ height: "100%", flex: 1 }} />
+          <SandpackCodeEditor showLineNumbers showTabs showInlineErrors readOnly={mapped !== null} style={{ height: "100%", flex: 1 }} />
         </SandpackLayout>
       </div>
     </SandpackProvider>

@@ -1,3 +1,4 @@
+import { ImportGitHub } from "@/components/ImportGitHub";
 import { ImportZip } from "@/components/ImportZip";
 import { LogOutButton } from "@/components/LogOutButton";
 import { Logo } from "@/components/Logo";
@@ -34,7 +35,8 @@ export default function Home() {
         <div className="mt-10">
           <PromptBox />
         </div>
-        <div className="mt-5 flex justify-center">
+        <div className="mt-5 flex flex-wrap items-start justify-center gap-3">
+          <ImportGitHub />
           <ImportZip />
         </div>
       </main>

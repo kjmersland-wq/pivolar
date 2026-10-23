@@ -94,6 +94,7 @@ export function analyze(files: FileMap): Report {
   if (services.some((s) => /database|Postgres|MongoDB|Supabase|Firebase/i.test(s))) risks.push("Prosjektet bruker en database. Pivolar rører ikke eksisterende data, og tilkoblingsnøkler må settes som miljøvariabler.");
 
   const pivolarNative = has("/App.tsx") && !pkg;
+  const viteReact = framework.id === "vite-react" && (has("/src/App.tsx") || has("/src/App.jsx"));
   return {
     framework,
     packageManager,
@@ -104,6 +105,8 @@ export function analyze(files: FileMap): Report {
     previewable: pivolarNative,
     previewNote: pivolarNative
       ? "Kan vises i forhåndsvisningen."
-      : "Kan leses, redigeres for hånd og eksporteres, men ikke vises i forhåndsvisningen ennå. Det krever kjøring av prosjektet i et isolert miljø (kommer i fase 4).",
+      : viteReact
+        ? "Vises i en forenklet forhåndsvisning: uten backend og miljøvariabler, og med temaet gjenskapt fra CSS-variablene. Endringer med AI virker på filene, og kan sendes til GitHub som en pull request."
+        : "Kan leses, redigeres for hånd og eksporteres, men ikke vises i forhåndsvisningen ennå. Det krever kjøring av prosjektet i et isolert miljø (kommer i fase 4).",
   };
 }
