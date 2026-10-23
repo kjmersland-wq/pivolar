@@ -7,6 +7,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
 import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, MousePointerClick, Rocket, ScanSearch, Smartphone, Tablet } from "lucide-react";
 import { BudgetDialog } from "@/components/BudgetDialog";
+import { LoopDialog } from "@/components/LoopDialog";
 import { CompareDialog } from "@/components/CompareDialog";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { ComposeDialog } from "@/components/ComposeDialog";
@@ -26,6 +27,9 @@ import type { Budget } from "@/lib/usage/summary";
 import type { Spec } from "@/lib/analyze/condense";
 import { findReference } from "@/lib/analyze/reference";
 import { cn } from "@/lib/utils";
+
+/** Times the same preview error is sent for fixing before the owner is asked. */
+const MAX_FIX_ATTEMPTS = 2;
 
 function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (value: T) => void; options: { value: T; label?: string; icon: typeof Eye }[] }) {
   return (
@@ -62,6 +66,9 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [composeOpen, setComposeOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  // The same preview error sent for fixing again and again. After MAX_FIX_ATTEMPTS the owner is asked first.
+  const fixAttempts = useRef<{ key: string; count: number; startedAt: number } | null>(null);
+  const [loopBlock, setLoopBlock] = useState<{ message: string; attempts: number; startedAt: number } | null>(null);
   const measureRef = useRef<(() => Promise<Spec>) | null>(null);
 
   // Code the user typed in the editor. Each edit remembers how many messages existed at that
@@ -155,7 +162,10 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   }, [messages, name, id]);
 
   const send = useCallback(
-    (text: string, attachments: FileUIPart[] = []) => guarded(attachments.length > 0 ? { text, files: attachments } : { text }),
+    (text: string, attachments: FileUIPart[] = []) => {
+      fixAttempts.current = null; // a message from the owner starts over
+      return guarded(attachments.length > 0 ? { text, files: attachments } : { text });
+    },
     [guarded],
   );
   const changeElement = useCallback(
@@ -175,13 +185,24 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
     },
     [guarded],
   );
-  const fix = useCallback(
+  const sendFix = useCallback(
     (message: string) => {
       setMode("build");
       modeRef.current = "build";
       void guarded({ text: `Forhåndsvisningen viser denne feilen. Finn årsaken og rett den:\n\n${message}` });
     },
     [guarded],
+  );
+  const fix = useCallback(
+    (message: string) => {
+      const key = message.replace(/\s+/g, " ").trim().slice(0, 240);
+      const current = fixAttempts.current;
+      const attempt = current && current.key === key ? { ...current, count: current.count + 1 } : { key, count: 1, startedAt: messages.length };
+      fixAttempts.current = attempt;
+      if (attempt.count > MAX_FIX_ATTEMPTS) return setLoopBlock({ message, attempts: attempt.count - 1, startedAt: attempt.startedAt });
+      sendFix(message);
+    },
+    [messages.length, sendFix],
   );
   const revert = useCallback(
     (messageId: string) => {
@@ -315,6 +336,26 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
             setBlocked(null);
           }}
           onDiscard={() => setBlocked(null)}
+        />
+      )}
+      {loopBlock && (
+        <LoopDialog
+          attempts={loopBlock.attempts}
+          error={loopBlock.message}
+          onCancel={() => setLoopBlock(null)}
+          onTryAnyway={() => {
+            const { message } = loopBlock;
+            setLoopBlock(null);
+            sendFix(message);
+          }}
+          onGoBack={() => {
+            // Back to how the project was before the first attempt, including the edits made after that point.
+            const { startedAt } = loopBlock;
+            setMessages(messages.slice(0, startedAt));
+            setEdits((prev) => prev.filter((edit) => edit.at <= startedAt));
+            fixAttempts.current = null;
+            setLoopBlock(null);
+          }}
         />
       )}
       <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} onCompose={compose} initialName={name} />

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FileUIPart, UIMessage } from "ai";
 import { AnimatePresence, motion } from "framer-motion";
+import { money } from "@/lib/usage/client";
 import { ScanSearch, Sparkles, AlertTriangle, ArrowUp, Check, FilePen, FilePlus2, Hammer, ImageIcon, Loader2, MessageSquare, MousePointerClick, Paperclip, Square, Trash2, Undo2, X } from "lucide-react";
 import { Markdown } from "@/components/Markdown";
 import { LogoMark } from "@/components/Logo";
@@ -126,6 +127,23 @@ function ToolStep({ part }: { part: Part }) {
   );
 }
 
+type Metadata = { costUsd?: number; inputTokens?: number; outputTokens?: number; cachedTokens?: number; stopped?: string };
+
+/** What one answer cost. An estimate from tokens, like the usage page; the provider's own figure counts. */
+function Cost({ metadata }: { metadata: unknown }) {
+  const m = metadata as Metadata | undefined;
+  if (!m || typeof m.costUsd !== "number") return null;
+  const tokens = (m.inputTokens ?? 0) + (m.outputTokens ?? 0);
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 text-[11.5px] tabular-nums text-faint" title="Anslått kostnad for dette svaret, fra antall tokens">
+      <span>≈ {money(m.costUsd)}</span>
+      <span>· {tokens.toLocaleString("nb-NO")} tokens</span>
+      {m.cachedTokens ? <span>· {Math.round((m.cachedTokens / Math.max(m.inputTokens ?? 1, 1)) * 100)} % fra mellomlager</span> : null}
+      {m.stopped ? <span className="text-amber-400">· stoppet av løkkevakten</span> : null}
+    </p>
+  );
+}
+
 function AssistantMessage({ message, last, busy, onRevert }: { message: UIMessage; last: boolean; busy: boolean; onRevert: () => void }) {
   const parts = message.parts as Part[];
   const hasContent = parts.some((p) => (p.type === "text" && p.text?.trim()) || p.type.startsWith("tool-"));
@@ -139,6 +157,7 @@ function AssistantMessage({ message, last, busy, onRevert }: { message: UIMessag
           return null;
         })}
         {!hasContent && busy && last && <div className="shimmer h-4 w-40 rounded-md" />}
+        {!busy && hasContent && <Cost metadata={message.metadata} />}
         {!busy && !last && hasContent && (
           <button
             type="button"

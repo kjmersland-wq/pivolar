@@ -2,10 +2,13 @@ import { anthropic } from "@ai-sdk/anthropic";
 import { convertToModelMessages, createUIMessageStreamResponse, generateImage, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
 import { createAnalyzeTool, trimOldAnalyses } from "@/lib/analyze/tool";
+import { buildIndex, readFile, recentPaths, searchFiles, shouldIndex } from "@/lib/context";
+import { detectLoop, withNoteBeforeFinish, type LoopFinding, type StepLike } from "@/lib/guard/loop";
 import { createImageTool } from "@/lib/image-gen";
 import { searchImages } from "@/lib/images";
 import { createClient } from "@/lib/supabase/server";
 import { logChatUsage, logImageUsage } from "@/lib/usage/log";
+import { chatCostDetailed, pricesFor } from "@/lib/usage/pricing";
 import { SANDBOX_DEPENDENCIES, applyTool, deriveFiles, visibleFiles, type FileMap, type UserEdit } from "@/lib/files";
 
 export const maxDuration = 300;
@@ -29,15 +32,24 @@ const MODEL = process.env.ANTHROPIC_API_KEY
   ? anthropic(process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5")
   : (process.env.AI_GATEWAY_MODEL ?? "anthropic/claude-sonnet-5.5");
 
-function systemPrompt(files: FileMap, mode: "build" | "chat") {
-  const listing = Object.entries(visibleFiles(files))
-    .map(([path, content]) => `--- ${path}\n${content}`)
-    .join("\n\n");
+function filesSection(files: FileMap, recent: string[]): string {
+  const visible = visibleFiles(files);
+  // Small projects are sent in full. Big ones get a map and the newest files, and the rest is read on demand.
+  if (!shouldIndex(files)) {
+    return `GJELDENDE FILER\n${Object.entries(visible).map(([path, content]) => `--- ${path}\n${content}`).join("\n\n")}`;
+  }
+  const index = buildIndex(files, recent);
+  const bodies = index.inlined.map((path) => `--- ${path}\n${visible[path]}`).join("\n\n");
+  return `PROSJEKTET ER STORT, så bare de nyeste filene står i fulltekst. Under er et kart over ALLE filene. Les en fil med readFile (nøyaktig tekst, bruk from/to for lange filer) FØR du endrer en fil du ikke ser i fulltekst, og bruk searchFiles for å finne hvor noe brukes. Ikke gjett på innholdet i filer du ikke har lest. Brukerens egne endringer ligger i filene.\n\nFILKART\n${index.map}\n\nFILER I FULLTEKST\n${bodies}`;
+}
+
+function systemPrompt(files: FileMap, mode: "build" | "chat", recent: string[]) {
+  const section = filesSection(files, recent);
   return `Du er Pivolar, en erfaren designer og frontend-utvikler som bygger små apper sammen med brukeren.
 Brukeren skriver vanligvis norsk. Svar på samme språk som brukeren, kort og vennlig, og skriv teksten i selve appen på språket brukeren ber om.
 
 BRUKERENS EGNE ENDRINGER OG BILDER
-- Brukeren kan redigere kode selv. «GJELDENDE FILER» under er alltid den nyeste versjonen, med brukerens endringer. Bygg videre på den, ikke på det du husker.
+- Brukeren kan redigere kode selv. Filene under (se «GJELDENDE FILER» eller «FILKART») er alltid den nyeste versjonen, med brukerens endringer. Bygg videre på den, ikke på det du husker.
 - Brukeren kan sende bilder (skjermbilder, skisser, design). Gjenskap det du ser så nøyaktig som mulig: layout, farger, typografi og stemning. Beskriv kort hva du tolket.
 - Brukeren kan velge et element i forhåndsvisningen. Meldingen har da en blokk <valgt-element> med tag, tekst, klasser og komponentnavn. Finn elementet i koden (søk etter teksten og klassene) og gjør kun endringen brukeren ber om. Ikke endre andre tekster, e-postadresser, priser eller stil som ikke er nevnt. Gjelder ønsket tydelig hele nettstedet (for eksempel et navn), endre det samme overalt, men si fra om det.
 
@@ -115,8 +127,7 @@ ${
 - Du skal ikke endre noen filer nå. Diskuter, foreslå og planlegg. Hold svarene korte og konkrete.`
 }
 
-GJELDENDE FILER
-${listing}`;
+${section}`;
 }
 
 /**
@@ -179,21 +190,46 @@ export async function POST(request: Request) {
       })
     : null;
 
+  // Files the conversation has touched, newest first (the user's own edits count most).
+  const recent = [...new Set([...edits.map((edit) => edit.path).reverse(), ...recentPaths(messages)])];
+  // Set when the request stops going anywhere; the note below tells the user why.
+  let loop: LoopFinding | null = null;
+
+  const readTools = {
+    readFile: {
+      description: "Les en fil i prosjektet (nøyaktig tekst). Bruk from og to (linjenummer, 1-basert) for lange filer. Les en fil før du endrer den hvis du ikke har den i fulltekst.",
+      inputSchema: z.object({ path: z.string(), from: z.number().int().min(1).optional(), to: z.number().int().min(1).optional() }),
+      execute: async (input: { path: string; from?: number; to?: number }) => readFile(working, input),
+    },
+    searchFiles: {
+      description: "Søk i alle filene etter tekst (ikke skill mellom store og små bokstaver), eller et regulært uttrykk med regex: true. Gir fil og linje for hvert treff.",
+      inputSchema: z.object({ query: z.string().min(1), regex: z.boolean().optional(), path: z.string().optional().describe("Begrens til filer under denne stien, for eksempel /components") }),
+      execute: async (input: { query: string; regex?: boolean; path?: string }) => searchFiles(working, input),
+    },
+  };
+
   const run = (tool: string) => async (input: Record<string, unknown>) => applyTool(working, tool, input);
 
   const result = streamText({
     model: MODEL,
-    instructions: systemPrompt(working, mode),
+    // The prompt is the same for every step of a request, so it is cached: later steps pay a tenth for it.
+    instructions: [{ role: "system", content: systemPrompt(working, mode, recent), providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }],
     // The analysis tool shapes its own result for the model (trimmed numbers plus pictures), so it is passed here too.
     messages: await convertToModelMessages(trimOldAnalyses(withoutEmptyImages(messages)), analyzeTool ? { tools: { analyzeSite: analyzeTool } } : {}),
-    stopWhen: isStepCount(25),
+    stopWhen: [
+      isStepCount(25),
+      ({ steps }) => {
+        loop = detectLoop(steps as unknown as StepLike[]);
+        return loop !== null;
+      },
+    ],
     // Every finished request is added to the usage meter. The server keeps running when the browser stops waiting, so it is still counted.
     onEnd: async ({ usage }) => {
       if (auth.user) await logChatUsage(supabase, auth.user.id, usage);
     },
-    ...(mode === "build"
+    tools: mode === "build"
       ? {
-          tools: {
+            ...readTools,
             writeFile: {
               description: "Opprett en fil eller skriv den helt på nytt med hele innholdet.",
               inputSchema: z.object({
@@ -243,10 +279,19 @@ export async function POST(request: Request) {
               }),
               execute: async (input) => searchImages(input),
             },
-          },
         }
-      : {}),
+      : readTools,
   });
 
-  return createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream, onError: friendlyError }) });
+  const uiStream = toUIMessageStream({
+    stream: result.stream,
+    onError: friendlyError,
+    // What the request cost, shown under the answer. An estimate from tokens, like the usage page.
+    messageMetadata: ({ part }) => {
+      if (part.type !== "finish") return undefined;
+      const cost = chatCostDetailed(part.totalUsage, pricesFor());
+      return { costUsd: cost.total, inputTokens: cost.inputTokens, outputTokens: cost.outputTokens, cachedTokens: cost.cachedTokens, ...(loop ? { stopped: (loop as LoopFinding).kind } : {}) };
+    },
+  });
+  return createUIMessageStreamResponse({ stream: withNoteBeforeFinish(uiStream as unknown as ReadableStream<{ type: string }>, () => (loop ? (loop as LoopFinding).message : null)) as never });
 }

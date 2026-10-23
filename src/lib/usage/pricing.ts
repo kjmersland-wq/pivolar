@@ -36,3 +36,25 @@ export function chatCost(inputTokens: number, outputTokens: number, prices: Pric
 export function imageCost(prices: Prices) {
   return round(prices.imageUsd);
 }
+
+/** Providers bill cached input at a fraction of the normal price, and writing to the cache at a premium. */
+export const CACHE_READ_FACTOR = 0.1;
+export const CACHE_WRITE_FACTOR = 1.25;
+
+export type ChatUsage = {
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  inputTokenDetails?: { noCacheTokens?: number | undefined; cacheReadTokens?: number | undefined; cacheWriteTokens?: number | undefined } | undefined;
+};
+
+/** Cost of one request, taking prompt caching into account. Tokens are the plain totals. */
+export function chatCostDetailed(usage: ChatUsage, prices: Prices) {
+  const input = Math.max(usage.inputTokens ?? 0, 0);
+  const output = Math.max(usage.outputTokens ?? 0, 0);
+  const read = Math.max(usage.inputTokenDetails?.cacheReadTokens ?? 0, 0);
+  const write = Math.max(usage.inputTokenDetails?.cacheWriteTokens ?? 0, 0);
+  const plain = usage.inputTokenDetails?.noCacheTokens ?? Math.max(input - read - write, 0);
+  const inputCost = round(((plain + read * CACHE_READ_FACTOR + write * CACHE_WRITE_FACTOR) / 1_000_000) * prices.inputPerMTok);
+  const outputCost = round((output / 1_000_000) * prices.outputPerMTok);
+  return { input: inputCost, output: outputCost, total: round(inputCost + outputCost), inputTokens: input, outputTokens: output, cachedTokens: read };
+}
