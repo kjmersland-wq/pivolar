@@ -43,6 +43,7 @@ function StepRow({ icon: Icon, title, state }: { icon: typeof GitBranch; title: 
         </p>
         {state.detail && state.status === "running" && <p className="mt-0.5 text-[12.5px] text-muted">{state.detail}</p>}
         {state.status === "error" && state.message && <p className="mt-1 text-[12.5px] leading-relaxed text-red-400">{state.message}</p>}
+        {state.status === "done" && state.message && <p className="mt-1 text-[12.5px] leading-relaxed text-amber-400">{state.message}</p>}
         {state.status === "skipped" && <p className="mt-0.5 text-[12.5px] text-faint">Hoppet over</p>}
         {state.status === "done" && state.url && (
           <a href={state.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 break-all text-[12.5px] text-accent hover:underline">

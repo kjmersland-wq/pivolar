@@ -112,4 +112,31 @@ assert.equal(readableOn("#fff"), "#111111");
   assert.throws(() => buildDeployableProject({ "/styles.css": "" }, "x"), /App\.tsx/);
 }
 
+// --- tests, CI and installable app
+{
+  const files = { "/App.tsx": "export default function App(){return null}", "/brand.json": JSON.stringify({ name: "Kaffebar", primary: "#112233" }) };
+  const project = buildDeployableProject(files, "Kaffebar");
+  const pkg = JSON.parse(project["package.json"]!);
+  assert.equal(pkg.scripts.typecheck, "tsc --noEmit");
+  assert.equal(pkg.scripts.test, "vitest run");
+  for (const dep of ["vitest", "jsdom", "@testing-library/react"]) assert.ok(dep in pkg.devDependencies, dep);
+  assert.match(project["vite.config.ts"]!, /from "vitest\/config"/);
+  assert.match(project["vite.config.ts"]!, /setupFiles: \["\.\/src\/test-setup\.ts"\]/);
+  assert.ok(project["src/App.test.tsx"] && project["src/test-setup.ts"], "a smoke test ships with the project");
+  assert.match(project["src/App.test.tsx"]!, /render\(<App \/>\)/);
+  const ci = project[".github/workflows/ci.yml"]!;
+  for (const step of ["npm run typecheck", "npm test", "npm run build"]) assert.ok(ci.includes(step), step);
+  assert.match(project["index.html"]!, /rel="manifest" href="\/manifest\.webmanifest"/);
+  assert.ok(project["public/sw.js"]!.includes('addEventListener("fetch"'));
+  assert.match(project["src/main.tsx"]!, /serviceWorker\.register\("\/sw\.js"\)/);
+  assert.match(project["src/main.tsx"]!, /import\.meta\.env\.PROD/, "no service worker while developing");
+  const bare = JSON.parse(project["public/manifest.webmanifest"]!);
+  assert.equal(bare.name, "Kaffebar");
+  assert.equal(bare.display, "standalone");
+  assert.equal(bare.theme_color, "#112233");
+  assert.deepEqual(bare.icons, [], "no icon entries when the icons are not generated");
+  const withIcons = JSON.parse(buildDeployableProject(files, "Kaffebar", { icons: true })["public/manifest.webmanifest"]!);
+  assert.deepEqual(withIcons.icons.map((i: { sizes: string; purpose: string }) => `${i.sizes}:${i.purpose}`), ["192x192:any", "512x512:any", "512x512:maskable"]);
+}
+
 console.log("publish: all ok");

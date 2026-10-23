@@ -1,7 +1,7 @@
 import { PROTECTED_PATHS, type FileMap } from "@/lib/files";
 import { readBrand } from "@/lib/publish/brand";
 import { publishToGitHub, type PublishFile } from "@/lib/publish/github";
-import { renderOgImage } from "@/lib/publish/og";
+import { renderIcon, renderOgImage } from "@/lib/publish/og";
 import { bundleStorageImages } from "@/lib/publish/storage-images";
 import { buildDeployableProject, slugify } from "@/lib/publish/project";
 import { deployToVercel } from "@/lib/publish/vercel";
@@ -54,10 +54,15 @@ export async function POST(request: Request) {
         if (Object.keys(files).length === 0) throw new Error("Prosjektet har ingen filer å publisere.");
         // Pictures generated in Pivolar are copied into the project, so the site does not depend on Pivolar's storage.
         const bundled = await bundleStorageImages(files, process.env.NEXT_PUBLIC_SUPABASE_URL);
-        const project: Record<string, PublishFile> = { ...buildDeployableProject(bundled.files, title), ...bundled.images };
+        const project: Record<string, PublishFile> = { ...buildDeployableProject(bundled.files, title, { icons: true }), ...bundled.images };
         // The share image is drawn from /brand.json and the logo. Without them it uses the title and default colours.
         const og = await renderOgImage(readBrand(files, title));
         project["public/og.png"] = { base64: Buffer.from(og).toString("base64") };
+        // Home-screen icons for the installable app (the manifest points at these).
+        const brand = readBrand(files, title);
+        for (const [name, size, maskable] of [["icon-192", 192, false], ["icon-512", 512, false], ["icon-maskable-512", 512, true]] as const) {
+          project[`public/${name}.png`] = { base64: Buffer.from(await renderIcon(brand, size, maskable)).toString("base64") };
+        }
         send({ step: "project", status: "done", files: Object.keys(project).length });
 
         if (body.dryRun) {
@@ -82,7 +87,14 @@ export async function POST(request: Request) {
                 message: "Publisert fra Pivolar",
                 isPrivate: body.isPrivate !== false,
               });
-              send({ step: "github", status: "done", url: result.url, commitUrl: result.commitUrl, created: result.created });
+              send({
+                step: "github",
+                status: "done",
+                url: result.url,
+                commitUrl: result.commitUrl,
+                created: result.created,
+                ...(result.workflowSkipped ? { message: "Kontroll-arbeidsflyten (CI) ble ikke lagt til: GITHUB_TOKEN trenger tillatelsen «Workflow» for det." } : {}),
+              });
             } catch (error) {
               ok = false;
               send({ step: "github", status: "error", message: error instanceof Error ? error.message : "GitHub feilet." });

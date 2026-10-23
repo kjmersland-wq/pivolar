@@ -127,3 +127,36 @@ export async function renderOgImage(brand: Brand): Promise<Uint8Array> {
   const response = new ImageResponse(<Layout brand={brand} logo={logo} />, { width: W, height: H, fonts });
   return new Uint8Array(await response.arrayBuffer());
 }
+
+/**
+ * Square app icon for the home screen, drawn from the brand: the logo on the brand gradient, or the
+ * first letter of the name when there is no logo. A maskable icon keeps the mark inside the centre
+ * 60 %, because phones crop it to a circle or squircle.
+ */
+export async function renderIcon(brand: Brand, size: number, maskable = false): Promise<Uint8Array> {
+  const logo = brand.logoSvg ? `data:image/svg+xml;base64,${Buffer.from(brand.logoSvg, "utf8").toString("base64")}` : null;
+  const { fonts } = await loadOgFonts(brand.headingFont);
+  const ink = readableOn(mix(brand.primary, brand.secondary, 0.5));
+  const mark = Math.round(size * (maskable ? 0.4 : 0.56));
+  const letter = (brand.name.trim()[0] ?? "P").toUpperCase();
+  const response = new ImageResponse(
+    (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: ink,
+          borderRadius: maskable ? 0 : size * 0.22,
+          backgroundImage: `linear-gradient(135deg, ${brand.primary} 0%, ${brand.secondary} 100%)`,
+        }}
+      >
+        {logo ? <Mark logo={logo} size={mark} color={ink} /> : <div style={{ fontFamily: "Heading", fontSize: mark, lineHeight: 1, display: "flex" }}>{letter}</div>}
+      </div>
+    ),
+    { width: size, height: size, fonts },
+  );
+  return new Uint8Array(await response.arrayBuffer());
+}

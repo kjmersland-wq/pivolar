@@ -13,7 +13,7 @@ type Options = {
   isPrivate: boolean;
 };
 
-export type GitHubResult = { owner: string; repo: string; url: string; commitUrl: string; created: boolean };
+export type GitHubResult = { owner: string; repo: string; url: string; commitUrl: string; created: boolean; /** Set when GitHub refused the CI workflow because the token may not edit workflows. */ workflowSkipped?: boolean };
 
 class GitHubError extends Error {}
 
@@ -88,10 +88,19 @@ export async function publishToGitHub({ token, owner, repo, files, message, isPr
     if (blob.status !== 201 || !blob.data.sha) throw new GitHubError(explain(blob.status, blob.data));
     entries.push({ path, mode: "100644", type: "blob", sha: blob.data.sha });
   }
-  const tree = await call<{ sha?: string }>(token, `${base}/git/trees`, {
-    method: "POST",
-    body: JSON.stringify({ base_tree: parent.data.tree.sha, tree: entries }),
-  });
+  const makeTree = (list: typeof entries) =>
+    call<{ sha?: string }>(token, `${base}/git/trees`, {
+      method: "POST",
+      body: JSON.stringify({ base_tree: parent.data.tree!.sha, tree: list }),
+    });
+  let tree = await makeTree(entries);
+  // A token without the "workflow" permission cannot add .github/workflows files. The site is still published, without CI.
+  let workflowSkipped = false;
+  const withoutWorkflows = entries.filter((entry) => !entry.path.startsWith(".github/workflows/"));
+  if ((tree.status !== 201 || !tree.data.sha) && withoutWorkflows.length < entries.length) {
+    tree = await makeTree(withoutWorkflows);
+    workflowSkipped = tree.status === 201;
+  }
   if (tree.status !== 201 || !tree.data.sha) throw new GitHubError(explain(tree.status, tree.data));
 
   const commit = await call<{ sha?: string; html_url?: string }>(token, `${base}/git/commits`, {
@@ -112,5 +121,6 @@ export async function publishToGitHub({ token, owner, repo, files, message, isPr
     url: `https://github.com/${login}/${repo}`,
     commitUrl: commit.data.html_url ?? `https://github.com/${login}/${repo}/commit/${commit.data.sha}`,
     created,
+    ...(workflowSkipped ? { workflowSkipped } : {}),
   };
 }
