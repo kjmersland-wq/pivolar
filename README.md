@@ -40,3 +40,13 @@ AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gr
 2. Redigerbar kode, bildeopplasting i chatten, klikk-og-endre i forhåndsvisningen.
 3. Database for prosjekter (flere enheter) og versjonsliste.
 4. Publisering: GitHub-repo og Vercel-deploy med ett klikk, og Supabase/Neon koblet på automatisk.
+
+## Publisering
+
+«Publiser»-knappen lager et vanlig Vite-prosjekt av appen, legger det i ett commit i et GitHub-repo og deployer det til Vercel. Legg i `.env.local`:
+
+- `GITHUB_TOKEN` (repo-tillatelse): https://github.com/settings/tokens/new?scopes=repo&description=Atelier
+- `VERCEL_TOKEN`: https://vercel.com/account/tokens
+- Valgfritt: `GITHUB_OWNER`, `VERCEL_TEAM_ID`
+
+Publiserer du igjen, oppdateres samme repo og samme Vercel-prosjekt.

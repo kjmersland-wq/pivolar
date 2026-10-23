@@ -12,6 +12,7 @@ const LIST_KEY = "atelier:projects:v1";
 const EVENT = "atelier:projects-changed";
 const msgKey = (id: string) => `atelier:msgs:${id}`;
 const editsKey = (id: string) => `atelier:edits:${id}`;
+const publishKey = (id: string) => `atelier:publish:${id}`;
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -87,6 +88,7 @@ export function deleteProject(id: string) {
   try {
     window.localStorage.removeItem(msgKey(id));
     window.localStorage.removeItem(editsKey(id));
+    window.localStorage.removeItem(publishKey(id));
   } catch {
     /* ignore */
   }
@@ -128,6 +130,17 @@ function withoutImageData(messages: UIMessage[]): UIMessage[] {
       part.type === "file" && part.url.startsWith("data:") ? { ...part, url: "" } : part,
     ),
   })) as UIMessage[];
+}
+
+/** Where a project was last published, so publishing again updates the same repo and site. */
+export type PublishInfo = { name: string; githubUrl?: string; liveUrl?: string; at: number };
+
+export function loadPublish(id: string): PublishInfo | null {
+  return read<PublishInfo | null>(publishKey(id), null);
+}
+
+export function savePublish(id: string, info: PublishInfo) {
+  write(publishKey(id), info);
 }
 
 export function loadEdits(id: string): UserEdit[] {

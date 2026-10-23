@@ -8,6 +8,7 @@ import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
 import { ChevronLeft, Code2, Eye, Monitor, MousePointerClick, Rocket, Smartphone, Tablet } from "lucide-react";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { Logo } from "@/components/Logo";
+import { PublishDialog } from "@/components/PublishDialog";
 import { Sandbox, type Device, type PickedElement, type View } from "@/components/Preview";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { deriveFiles, type UserEdit } from "@/lib/files";
@@ -45,6 +46,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [device, setDevice] = useState<Device>("desktop");
   const [name, setName] = useState(initialName);
   const [inspect, setInspect] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
 
   // Code the user typed in the editor. Each edit remembers how many messages existed at that
   // moment, so reverting the chat also reverts the edits that came after.
@@ -199,15 +201,18 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           <ThemeToggle />
           <button
             type="button"
-            disabled
-            title="Publisering kommer i neste etappe"
-            className="bg-brand hidden items-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-medium text-white opacity-60 sm:flex"
+            onClick={() => setPublishOpen(true)}
+            disabled={busy}
+            title="Legg koden på GitHub og siden live på Vercel"
+            className="bg-brand flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-medium text-white shadow-[0_8px_24px_-10px_var(--accent)] transition enabled:hover:brightness-110 disabled:opacity-60"
           >
             <Rocket className="size-3.5" />
-            Publiser
+            <span className="hidden sm:inline">Publiser</span>
           </button>
         </div>
       </header>
+
+      <PublishDialog open={publishOpen} onClose={() => setPublishOpen(false)} projectId={id} projectName={name} files={files} />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(340px,430px)_1fr]">
         <aside className="min-h-0 border-b border-line bg-bg-soft/60 lg:border-b-0 lg:border-r">
