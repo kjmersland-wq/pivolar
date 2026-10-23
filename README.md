@@ -51,6 +51,13 @@ AI Gateway krever et **betalingskort på Vercel-kontoen** for å låse opp de gr
 - Kostnaden er et estimat fra tokens og en prisliste (`PRICE_*` i `.env.example`). Kortet legges alltid inn hos Anthropic og Vercel, aldri i Pivolar.
 - Trenger migrasjonen `20261023170000_pivolar_usage.sql` i Supabase.
 
+## Bygg fra en referanse-side
+
+- Skriv i chatten at du vil lage noe i samme stil som, eller en kopi av, en side (for eksempel «lag en kopi av https://…»). AI-en kaller `analyzeSite`, som åpner siden i en ekte nettleser på 1280 px bredde, ruller gjennom den og måler skrifter, farger (hex), CSS-variabler, seksjoner (topp, høyde, padding), hver tekstblokk og hvert bilde med posisjon og størrelse, kort og rutenett, faste elementer og header. Du får også skjermbilder. Målingen kjører bare mot offentlige adresser (interne adresser og lokale nettverk blokkeres).
+- Er det en referanse i samtalen, vises **Sammenlign** i topplinjen. Den bytter forhåndsvisningen til en fast 1280 px bred ramme, måler resultatet med samme script og viser avvikene mot referansen (seksjonshøyder, avstander, skriftstørrelser, farger, kort, manglende tekst). **Be Pivolar rette avvikene** sender listen til chatten som en presis rettelsesbestilling.
+- Lokalt brukes Chrome på maskinen (sett `CHROME_PATH` hvis den ikke finnes); på Vercel brukes `@sparticuz/chromium`.
+- Bruk det på dine egne sider eller sider du har rett til å gjenskape. Bildene i en kopi hentes fra originalen og følger ikke med ved publisering.
+
 ## Etapper
 
 1. **Fundament** (ferdig): utseende, chat, kodeskriving, live forhåndsvisning, kodevisning, enhetsvisning, «prøv å fikse», historikk, innlogging.

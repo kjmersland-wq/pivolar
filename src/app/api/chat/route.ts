@@ -1,6 +1,7 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { convertToModelMessages, createUIMessageStreamResponse, generateImage, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
+import { createAnalyzeTool, trimOldAnalyses } from "@/lib/analyze/tool";
 import { createImageTool } from "@/lib/image-gen";
 import { searchImages } from "@/lib/images";
 import { createClient } from "@/lib/supabase/server";
@@ -47,6 +48,18 @@ PROSJEKTET
 - Grafer og diagrammer: bruk recharts. Datoer: date-fns.
 - Flere sider: bruk react-router-dom med HashRouter (ikke BrowserRouter, forhåndsvisningen har ingen server). Legg hver side i /pages/ og del layout (meny, bunn) i /components/. Bruk <Link> og NavLink, og scroll til toppen ved sidebytte.
 - Ingen backend, ingen filsystem og ingen miljøvariabler. Lagre data i komponenttilstand eller localStorage.
+
+REFERANSE-SIDER (kopi eller samme stil)
+- Vil brukeren lage noe i samme stil som, eller en kopi av, en eksisterende side, kall analyzeSite med adressen FØR du skriver kode. Verktøyet måler siden i en ekte nettleser og gir deg tall og skjermbilder. Det er bare for brukerens egne sider eller sider de har rett til å gjenskape. Ser det ut som en annens merkevare, bruk bare stilen (skrifter, farger, rytme), ikke deres tekst, logo og bilder, og si fra.
+- Slik bygger du fra målingen (dette er det som gir en nøyaktig kopi):
+  1. Legg skriftene og fargene i /styles.css som CSS-variabler med nøyaktig de målte verdiene (hex), og last skriftene med @import i riktige vekter ("fonts" i målingen).
+  2. Bruk faste px-verdier på 1024 px og opp, akkurat som målt: overskriftsstørrelser (fs), linjehøyde (lh), bokstavavstand (ls), vekt (fw), seksjonspadding (pt/pb), kortbredder og høyder, radier og avstander ("boxes": n kolonner, gap, cw/ch). Under 1024 px bruker du clamp og stabler kolonnene.
+  3. Bygg seksjonene i samme rekkefølge og med samme høyde ("h") og padding. En blokks "y" er avstanden fra seksjonens topp: bruk den til å få riktig vertikal rytme. Små dekorative bånd (for eksempel et 46 px høyt skillefelt) er egne seksjoner i målingen, ta dem med.
+  4. Gjenskap gradienttekst ("grad"), halvgjennomsiktige flater (farger med "@0.06" er alfa), kanter, skygger ("sh") og filtre ("fl"). Faste elementer ("overlays": cookie-melding, bokmerke-boks) og headeren ("header") skal ha samme størrelse og plassering.
+  5. Bruk bildene fra målingen ("src") som de er, så lenge brukeren eier dem. Bildene følger ikke med ved publisering, så si det kort.
+  6. Karuseller, animasjoner og hover ser du ikke i tall: les dem av skjermbildene og gjenskap oppførselen.
+  7. Målingen er gjort uten rullefelt, så en vanlig nettleser gir ca. 15 px smalere innhold. Ikke jag de 15 px.
+  8. Avslutt med å si at brukeren kan trykke «Sammenlign med referansen» for å måle forskjellen, og rett avvik med editFile, ikke ved å skrive om hele filer.
 
 BILDER OG ILLUSTRASJONER
 - To verktøy: searchImages finner ekte, gratis bilder (fotografier), generateImage lager helt egne bilder med en bildemodell. Velg riktig verktøy:
@@ -153,12 +166,26 @@ export async function POST(request: Request) {
       })
     : null;
 
+  // Reference sites are measured in a real browser; the screenshots are kept in the user's own storage folder.
+  const analyzeTool = auth.user
+    ? createAnalyzeTool({
+        userId: auth.user.id,
+        upload: async ({ path, bytes, mediaType }) => {
+          const storage = supabase.storage.from("pivolar-images");
+          const { error } = await storage.upload(path, bytes, { contentType: mediaType, upsert: false });
+          if (error) throw error;
+          return storage.getPublicUrl(path).data.publicUrl;
+        },
+      })
+    : null;
+
   const run = (tool: string) => async (input: Record<string, unknown>) => applyTool(working, tool, input);
 
   const result = streamText({
     model: MODEL,
     instructions: systemPrompt(working, mode),
-    messages: await convertToModelMessages(withoutEmptyImages(messages)),
+    // The analysis tool shapes its own result for the model (trimmed numbers plus pictures), so it is passed here too.
+    messages: await convertToModelMessages(trimOldAnalyses(withoutEmptyImages(messages)), analyzeTool ? { tools: { analyzeSite: analyzeTool } } : {}),
     stopWhen: isStepCount(25),
     // Every finished request is added to the usage meter. The server keeps running when the browser stops waiting, so it is still counted.
     onEnd: async ({ usage }) => {
@@ -204,6 +231,7 @@ export async function POST(request: Request) {
                   },
                 }
               : {}),
+            ...(analyzeTool ? { analyzeSite: analyzeTool } : {}),
             searchImages: {
               description:
                 "Søk etter gratis bilder (kind photo) eller illustrasjoner (kind illustration). Søk på engelsk. Returnerer adresser du kan bruke direkte i <img src>, med bredde, høyde, alt-tekst og fotograf.",

@@ -1,3 +1,4 @@
+import { MEASURE_SOURCE } from "./analyze/measure-script.ts";
 import type { UIMessage } from "ai";
 
 export type FileMap = Record<string, string>;
@@ -86,6 +87,14 @@ root.render(
     window.parent.postMessage({ type: "atelier:select", info: describe(el) }, "*");
   }, true);
   window.parent.postMessage({ type: "atelier:ready" }, "*");
+  // Layout measurement on request, so the preview can be compared with a reference site.
+  var measure = ${MEASURE_SOURCE};
+  window.addEventListener("message", function (e) {
+    if (!e.data || e.data.type !== "atelier:measure") return;
+    var spec = null, error = null;
+    try { spec = measure(e.data.options || {}); } catch (err) { error = String((err && err.message) || err); }
+    window.parent.postMessage({ type: "atelier:measured", id: e.data.id, spec: spec, error: error }, "*");
+  });
 })();
 `,
   "/styles.css": `html, body, #root { margin: 0; min-height: 100%; }

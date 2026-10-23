@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type RefObject } from "react";
 import {
   SandpackCodeEditor,
   SandpackFileExplorer,
@@ -12,17 +12,20 @@ import {
 import { motion } from "framer-motion";
 import { AlertTriangle, Wand2 } from "lucide-react";
 import { ElementPanel, type Picked } from "@/components/ElementPanel";
+import type { Spec } from "@/lib/analyze/condense";
 import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, TAILWIND_CDN, type FileMap } from "@/lib/files";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-export type Device = "desktop" | "tablet" | "mobile";
+/** "wide" is a fixed 1280 px frame, scaled to fit, so the preview can be measured against a reference at its width. */
+export type Device = "desktop" | "tablet" | "mobile" | "wide";
 export type View = "preview" | "code";
 
 /** What the inspector inside the preview reports about the element the user clicked. */
 export type PickedElement = Picked;
 
-const WIDTHS: Record<Device, string> = { desktop: "100%", tablet: "820px", mobile: "390px" };
+const WIDTHS: Record<Device, string> = { desktop: "100%", tablet: "820px", mobile: "390px", wide: "1280px" };
+const WIDE = 1280;
 
 const serialize = (files: FileMap) => JSON.stringify(Object.keys(files).sort().map((path) => [path, files[path]]));
 
@@ -98,11 +101,16 @@ type SandboxProps = {
   onEdit: (path: string, content: string) => void;
   onElement: (picked: PickedElement, request: string) => void;
   onInspectDone: () => void;
+  /** Filled in with a function that measures the layout inside the preview. */
+  measureRef?: MutableRefObject<(() => Promise<Spec>) | null>;
 };
 
-export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onElement, onInspectDone }: SandboxProps) {
+export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onElement, onInspectDone, measureRef }: SandboxProps) {
   const theme = useTheme();
   const frame = useRef<HTMLDivElement>(null);
+  const pane = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const wide = device === "wide";
   const [picked, setPicked] = useState<PickedElement | null>(null);
   const [pickId, setPickId] = useState(0);
   // Imported projects bring their own package.json and layout, which the sandbox cannot run.
@@ -144,6 +152,44 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
     [],
   );
 
+  // The wide frame is 1280 px and shrinks to fit the space it has.
+  useEffect(() => {
+    const node = pane.current;
+    if (!node) return;
+    const update = () => setScale(Math.min(1, Math.max(0.3, (node.clientWidth - 32) / WIDE)));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Layout measurement through the inspector inside the preview, for the comparison with a reference.
+  useEffect(() => {
+    if (!measureRef) return;
+    measureRef.current = () =>
+      new Promise<Spec>((resolve, reject) => {
+        const target = frame.current?.querySelector("iframe")?.contentWindow;
+        if (!target) return reject(new Error("Forhåndsvisningen er ikke klar."));
+        const id = Math.random().toString(36).slice(2);
+        const timer = window.setTimeout(() => {
+          window.removeEventListener("message", onMessage);
+          reject(new Error("Forhåndsvisningen svarte ikke. Sjekk at den vises uten feil."));
+        }, 12000);
+        function onMessage(event: MessageEvent) {
+          if (event.source !== target || !event.data || event.data.type !== "atelier:measured" || event.data.id !== id) return;
+          window.clearTimeout(timer);
+          window.removeEventListener("message", onMessage);
+          if (event.data.error || !event.data.spec) reject(new Error(String(event.data.error ?? "Målingen mislyktes.")));
+          else resolve(event.data.spec as Spec);
+        }
+        window.addEventListener("message", onMessage);
+        target.postMessage({ type: "atelier:measure", id, options: { maxBlocks: 90 } }, "*");
+      });
+    return () => {
+      measureRef.current = null;
+    };
+  }, [measureRef, version]);
+
   // Talk to the inspector script inside the preview iframe.
   const inspectRef = useRef(inspect);
   useEffect(() => {
@@ -176,13 +222,13 @@ export function Sandbox({ files, view, device, busy, inspect, onFix, onEdit, onE
       <EditorBridge known={known} snapshot={snapshot} onEdit={onEdit} />
       {/* One provider for both views keeps the preview running while you look at the code. */}
       <div className={cn("relative h-full", view !== "preview" && "hidden")}>
-        <div className="flex h-full items-stretch justify-center overflow-auto bg-bg-soft p-0 sm:p-4">
+        <div ref={pane} className={cn("flex h-full items-stretch overflow-auto bg-bg-soft p-0 sm:p-4", wide ? "justify-start overflow-hidden" : "justify-center")}>
           <motion.div
             ref={frame}
             animate={{ width: WIDTHS[device] }}
             transition={{ type: "spring", stiffness: 260, damping: 30 }}
             className={cn("h-full overflow-hidden bg-white", device !== "desktop" && "rounded-[22px] border border-line-strong shadow-[var(--shadow)]", device === "desktop" && "sm:rounded-xl sm:border sm:border-line")}
-            style={{ maxWidth: "100%" }}
+            style={wide ? { maxWidth: "none", flexShrink: 0, transform: `scale(${scale})`, transformOrigin: "top left", height: `${100 / scale}%` } : { maxWidth: "100%" }}
           >
             <SandpackLayout style={{ height: "100%", border: 0, borderRadius: 0, background: "transparent" }}>
               <SandpackPreview showNavigator={false} showOpenInCodeSandbox={false} showRefreshButton={false} showSandpackErrorOverlay={false} style={{ height: "100%", flex: 1 }} />

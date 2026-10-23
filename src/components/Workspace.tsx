@@ -5,8 +5,9 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Monitor, MousePointerClick, Rocket, Smartphone, Tablet } from "lucide-react";
+import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, MousePointerClick, Rocket, ScanSearch, Smartphone, Tablet } from "lucide-react";
 import { BudgetDialog } from "@/components/BudgetDialog";
+import { CompareDialog } from "@/components/CompareDialog";
 import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { ComposeDialog } from "@/components/ComposeDialog";
 import { ExportDialog } from "@/components/ExportDialog";
@@ -22,6 +23,8 @@ import { addQueued, loadQueued, removeQueued } from "@/lib/queued";
 import { pullOne } from "@/lib/sync";
 import { fetchUsage, invalidateUsage } from "@/lib/usage/client";
 import type { Budget } from "@/lib/usage/summary";
+import type { Spec } from "@/lib/analyze/condense";
+import { findReference } from "@/lib/analyze/reference";
 import { cn } from "@/lib/utils";
 
 function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (value: T) => void; options: { value: T; label?: string; icon: typeof Eye }[] }) {
@@ -58,6 +61,8 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [publishOpen, setPublishOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const measureRef = useRef<(() => Promise<Spec>) | null>(null);
 
   // Code the user typed in the editor. Each edit remembers how many messages existed at that
   // moment, so reverting the chat also reverts the edits that came after.
@@ -93,6 +98,13 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   }, [busy]);
 
   const files = useMemo(() => deriveFiles(messages, edits), [messages, edits]);
+
+  // The newest measured reference site in the conversation, if there is one.
+  const reference = useMemo(() => findReference(messages), [messages]);
+  const measure = useCallback(
+    () => (measureRef.current ? measureRef.current() : Promise.reject(new Error("Forhåndsvisningen er ikke klar ennå. Vent litt og prøv igjen."))),
+    [],
+  );
   const messageCount = useRef(messages.length);
   useEffect(() => {
     messageCount.current = messages.length;
@@ -231,6 +243,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
                 { value: "desktop", label: "Desktop", icon: Monitor },
                 { value: "tablet", label: "Nettbrett", icon: Tablet },
                 { value: "mobile", label: "Mobil", icon: Smartphone },
+                { value: "wide", label: "1280", icon: Maximize2 },
               ]}
             />
           )}
@@ -253,6 +266,22 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
             <Download className="size-3.5" />
             <span className="hidden md:inline">Eksporter</span>
           </button>
+          {reference && (
+            <button
+              type="button"
+              onClick={() => {
+                setView("preview");
+                setDevice("wide");
+                setCompareOpen(true);
+              }}
+              disabled={busy}
+              title="Mål forhåndsvisningen mot referansesiden og se hva som avviker"
+              className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition enabled:hover:text-fg disabled:opacity-50"
+            >
+              <ScanSearch className="size-3.5" />
+              <span className="hidden md:inline">Sammenlign</span>
+            </button>
+          )}
           <UsageMeter />
           <ThemeToggle />
           <button
@@ -289,6 +318,18 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         />
       )}
       <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} onCompose={compose} initialName={name} />
+      <CompareDialog
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        reference={reference}
+        measure={measure}
+        busy={busy}
+        onFix={(text) => {
+          setMode("build");
+          modeRef.current = "build";
+          void guarded({ text });
+        }}
+      />
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={id} name={name} files={files} />
       <PublishDialog open={publishOpen} onClose={() => setPublishOpen(false)} projectId={id} projectName={name} files={files} />
 
@@ -297,7 +338,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           <ChatPanel messages={messages} status={status} error={error} mode={mode} onModeChange={setMode} onSend={send} onStop={stop} onRevert={revert} />
         </aside>
         <main className="min-h-0">
-          <Sandbox files={files} view={view} device={device} busy={busy} inspect={inspect} onFix={fix} onEdit={editFile} onElement={changeElement} onInspectDone={() => setInspect(false)} />
+          <Sandbox files={files} view={view} device={device} busy={busy} inspect={inspect} onFix={fix} onEdit={editFile} onElement={changeElement} onInspectDone={() => setInspect(false)} measureRef={measureRef} />
         </main>
       </div>
     </div>

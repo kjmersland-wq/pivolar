@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FileUIPart, UIMessage } from "ai";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, AlertTriangle, ArrowUp, Check, FilePen, FilePlus2, Hammer, ImageIcon, Loader2, MessageSquare, MousePointerClick, Paperclip, Square, Trash2, Undo2, X } from "lucide-react";
+import { ScanSearch, Sparkles, AlertTriangle, ArrowUp, Check, FilePen, FilePlus2, Hammer, ImageIcon, Loader2, MessageSquare, MousePointerClick, Paperclip, Square, Trash2, Undo2, X } from "lucide-react";
 import { Markdown } from "@/components/Markdown";
 import { LogoMark } from "@/components/Logo";
 import { cn } from "@/lib/utils";
@@ -87,13 +87,14 @@ const STEP_META: Record<string, { icon: typeof FilePen; active: string; done: st
   deleteFile: { icon: Trash2, active: "Sletter", done: "Slettet" },
   searchImages: { icon: ImageIcon, active: "Søker etter bilder", done: "Fant bilder" },
   generateImage: { icon: Sparkles, active: "Lager bilde", done: "Lagde bilde" },
+  analyzeSite: { icon: ScanSearch, active: "Måler referansesiden", done: "Målte referansesiden" },
 };
 
 function ToolStep({ part }: { part: Part }) {
   const name = part.type.slice(5);
   const meta = STEP_META[name];
   if (!meta) return null;
-  const path = String(part.input?.path ?? part.input?.query ?? String(part.input?.prompt ?? "").slice(0, 60));
+  const path = String(part.input?.path ?? part.input?.query ?? part.input?.url ?? String(part.input?.prompt ?? "").slice(0, 60));
   const failed = part.state === "output-error" || part.output?.ok === false;
   const done = part.state === "output-available" && !failed;
   const Icon = meta.icon;
