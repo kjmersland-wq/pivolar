@@ -272,3 +272,20 @@ I Mer-panelet (seksjonen «Kunnskap») skriver eieren varige regler for AI-en i 
 - **Bruk:** hver melding til AI-en får instruksene som en egen del av systemprompten, i en avgrenset blokk. Teksten renses (kontrolltegn og tagger som kunne lukket blokken fjernes). De gir ingen nye verktøy og kan ikke oppheve reglene ellers, og en melding fra eieren som strider mot dem, går foran.
 
 Prompt-hjelperen kan også lagre språk, tone, fakta om virksomheten og aksentfargen som faste regler (Kunnskap) for prosjektet. Det er en avkrysning under bestillingen, på som standard, og den viser reglene som lagres. De settes på prosjektet idet det opprettes, og gjelder i alle meldinger. Et hurtigforslag på forsiden arver ikke regler du valgte tidligere.
+
+## Automatisk utrulling til Netlify og Cloudflare Pages
+
+Velger du Netlify eller Cloudflare i publiseringsdialogen og har lagt inn nøklene, legger Pivolar siden ut selv etter at koden er på GitHub. Uten nøklene gjelder det gamle: koden og innstillingsfilene på GitHub, og en knapp som åpner vertens egen utrullingsside.
+
+**Nøkler** (miljøvariabler, bare for deg som eier; de vises aldri i nettleseren):
+- Netlify: `NETLIFY_TOKEN` (User settings → Applications → Personal access tokens).
+- Cloudflare: `CLOUDFLARE_API_TOKEN` med tillatelsen «Cloudflare Pages: Edit», og `CLOUDFLARE_ACCOUNT_ID`.
+
+**Slik går det** (`src/lib/deploy/`):
+1. Nettstedet opprettes hos verten (eller finnes fra før med samme navn), så adressen er kjent.
+2. Prosjektet bygges i en isolert, midlertidig maskin (Vercel Sandbox, `npm install` og `npm run build`) med adressen som `SITE_URL`, slik at canonical, sitemap og ferdig HTML for importerte nettsteder får riktig adresse. Ingen nøkler eller annet av eierens miljø sendes inn i maskinen, og den stoppes alltid etterpå.
+3. Filene i `dist` sjekkes (gyldige navn, høyst 2 000 filer, 25 MB per fil og 80 MB til sammen, og en `index.html`), og `_redirects` (alle adresser som ikke er filer åpner forsiden) og `_headers` (sikkerhetshoder) legges til hvis siden ikke har egne.
+4. Netlify: filsammendrag med SHA-1, bare filene Netlify ber om lastes opp, og Pivolar venter til utleggingen er klar. Cloudflare: direkte opplasting (samme API som Wrangler) der hver fil får navn etter BLAKE3-hash, bare de som mangler lastes opp, og en utlegging lages fra fillisten.
+5. Nøkkelen sendes bare til verten den hører til, og en utlegging som feiler eller en bygging som feiler laster ingenting opp.
+
+**Begrensninger:** siden kan ikke ha serverfunksjoner under `/api` (de virker bare på Vercel). Selve byggingen tar ofte 1–3 minutter. API-kallene er bygd etter vertenes dokumenterte flyt og testet mot en etterlikning, ikke mot de ekte tjenestene, så første utlegging bør du følge selv.

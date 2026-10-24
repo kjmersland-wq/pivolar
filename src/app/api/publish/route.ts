@@ -11,6 +11,8 @@ import { renderIcon, renderOgImage } from "@/lib/publish/og";
 import { bundleStorageImages } from "@/lib/publish/storage-images";
 import { buildDeployableProject, slugify } from "@/lib/publish/project";
 import { deployToVercel } from "@/lib/publish/vercel";
+import { autoHosts, deployAuto, isAutoHost, type Opened } from "@/lib/deploy/auto";
+import type { BuildSandbox } from "@/lib/deploy/build";
 
 export const maxDuration = 300;
 
@@ -19,6 +21,8 @@ export async function GET() {
   return Response.json({
     github: Boolean(process.env.GITHUB_TOKEN),
     vercel: Boolean(process.env.VERCEL_TOKEN),
+    // Which hosts Pivolar can roll out to by itself. Only yes or no.
+    ...autoHosts(),
   });
 }
 
@@ -32,6 +36,8 @@ type Body = {
   env?: Record<string, string>;
   /** Where the site goes (see HOSTS). Vercel when left out. */
   host?: string;
+  /** Netlify and Cloudflare are rolled out from here when their keys are set. False keeps only the code on GitHub. */
+  autoDeploy?: boolean;
   /** The Pivolar project id, used to look up the Google sign-ins of the project. */
   projectId?: string;
   /** The Pivolar project id. When set, the site counts page views (without cookies) and reports them to Pivolar. */
@@ -44,6 +50,7 @@ type Event =
   | { step: "project"; status: "done"; files: number }
   | { step: "github"; status: "running" | "done" | "error" | "skipped"; url?: string; commitUrl?: string; created?: boolean; message?: string }
   | { step: "vercel"; status: "running" | "done" | "error" | "skipped"; state?: string; url?: string; inspectorUrl?: string; message?: string }
+  | { step: "host"; status: "running" | "done" | "error" | "skipped"; detail?: string; url?: string; message?: string; created?: boolean }
   | { step: "finished"; ok: boolean };
 
 /**
@@ -152,6 +159,30 @@ export async function POST(request: Request) {
           }
         } else {
           send({ step: "vercel", status: "skipped" });
+        }
+
+        // Netlify and Cloudflare Pages: built in an isolated machine and uploaded with the owner's own key.
+        if (isAutoHost(host) && body.autoDeploy !== false && autoHosts()[host]) {
+          if (!wantGitHub || !ok) {
+            // The code is on GitHub first. If that failed, nothing more is done, and the answer says so.
+            send({ step: "host", status: "skipped", message: "Hoppet over fordi GitHub feilet." });
+          } else {
+            send({ step: "host", status: "running", detail: "Gjør klart …" });
+            try {
+              const opened = async (): Promise<Opened> => {
+                const { Sandbox } = await import("@vercel/sandbox");
+                const sandbox = await Sandbox.create({ timeout: 6 * 60_000, resources: { vcpus: 4 } });
+                return { sandbox: sandbox as unknown as BuildSandbox, stop: async () => void (await sandbox.stop()) };
+              };
+              const result = await deployAuto({ host, name: slug, project, open: opened, onStatus: (detail) => send({ step: "host", status: "running", detail }) });
+              send({ step: "host", status: "done", url: result.url, created: result.created });
+            } catch (error) {
+              ok = false;
+              send({ step: "host", status: "error", message: error instanceof Error ? error.message : "Utrullingen feilet." });
+            }
+          }
+        } else if (isAutoHost(host)) {
+          send({ step: "host", status: "skipped" });
         }
       } catch (error) {
         ok = false;

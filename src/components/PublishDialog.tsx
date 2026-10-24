@@ -14,11 +14,11 @@ import { loadPublish, savePublish, type PublishInfo } from "@/lib/projects";
 import { slugify } from "@/lib/publish/project";
 import { cn } from "@/lib/utils";
 
-type Config = { github: boolean; vercel: boolean };
+type Config = { github: boolean; vercel: boolean; netlify?: boolean; cloudflare?: boolean };
 type StepState = { status: "idle" | "running" | "done" | "error" | "skipped"; message?: string; url?: string; detail?: string };
-type Steps = { project: StepState; github: StepState; vercel: StepState };
+type Steps = { project: StepState; github: StepState; vercel: StepState; host: StepState };
 
-const IDLE: Steps = { project: { status: "idle" }, github: { status: "idle" }, vercel: { status: "idle" } };
+const IDLE: Steps = { project: { status: "idle" }, github: { status: "idle" }, vercel: { status: "idle" }, host: { status: "idle" } };
 
 const VERCEL_STATES: Record<string, string> = {
   QUEUED: "I kø hos Vercel …",
@@ -151,10 +151,13 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
   const slug = slugify(name);
   const hostInfo = hostById(host);
   const link = host !== "vercel" && steps.github.status === "done" && steps.github.url ? deployLink(host, steps.github.url) : null;
+  // Netlify and Cloudflare are rolled out from here when their keys are set; otherwise only the code goes to GitHub and the host's own page does the rest.
+  const auto = (host === "netlify" && config?.netlify) || (host === "cloudflare" && config?.cloudflare) ? true : false;
+  const autoKeys = host === "netlify" ? "NETLIFY_TOKEN" : host === "cloudflare" ? "CLOUDFLARE_API_TOKEN og CLOUDFLARE_ACCOUNT_ID" : "";
 
   async function publish() {
     setRunning(true);
-    setSteps({ project: { status: "running" }, github: { status: "idle" }, vercel: { status: "idle" } });
+    setSteps({ project: { status: "running" }, github: { status: "idle" }, vercel: { status: "idle" }, host: { status: "idle" } });
     let githubUrl: string | undefined;
     let liveUrl: string | undefined;
     let ok = false;
@@ -182,9 +185,9 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
             continue;
           }
           const status = event.status as StepState["status"];
-          const detail = step === "vercel" && typeof event.state === "string" ? VERCEL_STATES[event.state] ?? event.state : undefined;
+          const detail = step === "vercel" && typeof event.state === "string" ? VERCEL_STATES[event.state] ?? event.state : step === "host" && typeof event.detail === "string" ? event.detail : undefined;
           if (step === "github" && status === "done") githubUrl = event.url as string;
-          if (step === "vercel" && status === "done") liveUrl = event.url as string;
+          if ((step === "vercel" || step === "host") && status === "done") liveUrl = event.url as string;
           setSteps((prev) => ({
             ...prev,
             [step]: {
@@ -210,7 +213,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
     }
   }
 
-  const finished = steps.vercel.status === "done" || steps.github.status === "done" || steps.github.status === "error" || steps.vercel.status === "error";
+  const finished = steps.vercel.status === "done" || steps.github.status === "done" || steps.github.status === "error" || steps.vercel.status === "error" || steps.host.status === "done" || steps.host.status === "error";
 
   return (
     <AnimatePresence>
@@ -285,10 +288,17 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                   <StepRow icon={Rocket} title="Gjør prosjektet klart" state={steps.project} />
                   <StepRow icon={GitBranch} title="GitHub" state={steps.github} />
                   {host === "vercel" && <StepRow icon={Globe} title="Vercel" state={steps.vercel} />}
+                  {auto && <StepRow icon={Globe} title={hostInfo.name} state={steps.host} />}
                 </div>
               )}
 
-              {host !== "vercel" && steps.github.status === "done" && (
+              {host !== "vercel" && host !== "github-pages" && (host === "netlify" || host === "cloudflare") && !auto && (
+                <p className="rounded-xl border border-line bg-surface-2 p-3 text-[12.5px] text-muted">
+                  Vil du at Pivolar legger siden ut hos {hostInfo.name} selv? Legg inn <span className="font-mono text-fg">{autoKeys}</span> i miljøvariablene, så bygges siden i en isolert maskin og lastes opp. Uten nøkkelen legges bare koden på GitHub, og du fullfører hos {hostInfo.name}.
+                </p>
+              )}
+
+              {host !== "vercel" && steps.github.status === "done" && (!auto || steps.host.status === "error" || steps.host.status === "skipped") && (
                 <div className="space-y-2 rounded-xl border border-line bg-surface-2 p-3.5">
                   <p className="text-[13.5px] font-medium">Neste steg hos {hostInfo.name}</p>
                   <ol className="list-decimal space-y-1 pl-5 text-[12.5px] text-muted">
