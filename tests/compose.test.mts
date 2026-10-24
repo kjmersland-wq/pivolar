@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { composeSite, DEFAULT_SPEC, type Spec } from "../src/lib/compose.ts";
 import { contrast, ensureContrast, hexToHsl, hslToHex, makePalette, readableOn } from "../src/lib/palette.ts";
@@ -44,4 +46,44 @@ assert.equal(Object.keys(tricky).filter((k) => k.includes("Hero")).length, 1, "d
 const minimal = check({ ...DEFAULT_SPEC, sections: [] });
 assert.ok(!minimal["/App.tsx"]!.includes("Hero"));
 assert.ok(minimal["/App.tsx"]!.includes("Footer"));
+
+// the newsletter and share sections
+{
+  const files = check({ ...DEFAULT_SPEC, name: "Kaffestua", email: "hei@kaffestua.no" });
+  assert.ok(files["/components/Newsletter.tsx"] && files["/components/Share.tsx"], "both are in the default page");
+  assert.match(files["/App.tsx"]!, /<Newsletter \/>[\s\S]*<Contact \/>[\s\S]*<Share \/>/, "the sign-up comes before the contact section and the share row after it");
+  const news = files["/components/Newsletter.tsx"]!;
+  assert.match(news, /fetch\("\/api\/subscribe"/, "it posts to the function the Resend connector adds");
+  assert.match(news, /name="website"[\s\S]*?tabIndex=\{-1\}/, "with the hidden field that people never fill in");
+  assert.match(news, /type="email" required/);
+  assert.match(news, /Resend er koblet til/, "and the preview says why it does not work there");
+  const sharing = files["/components/Share.tsx"]!;
+  for (const host of ["facebook.com/sharer", "twitter.com/intent/tweet", "linkedin.com/sharing/share-offsite", "wa.me", "mailto:"]) assert.ok(sharing.includes(host), host);
+  assert.match(sharing, /noopener,noreferrer/, "the share windows cannot reach back");
+  assert.ok(!/dangerouslySetInnerHTML|innerHTML|eval\(/.test(news + sharing));
+  const named = check({ ...DEFAULT_SPEC, name: 'Ola {"}"} <b>' });
+  assert.ok(named["/components/Share.tsx"]!.includes('const text = "Ola'), "the name goes into the share text as a string");
+  const only = check({ ...DEFAULT_SPEC, sections: ["newsletter"] });
+  assert.deepEqual(Object.keys(only).filter((k) => /Newsletter|Share/.test(k)), ["/components/Newsletter.tsx"]);
+}
+
+// the whole composed page is valid TypeScript against the real types of React and the icon package
+{
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const dir = join(root, ".gen-compose").replace(/\\/g, "/");
+  const files = composeSite({ ...DEFAULT_SPEC, name: "Kaffestua", email: "hei@kaffestua.no" });
+  const virtual = new Map(Object.entries(files).filter(([p]) => /\.tsx?$/.test(p)).map(([p, code]) => [`${dir}${p}`, code]));
+  const options: ts.CompilerOptions = { jsx: ts.JsxEmit.ReactJSX, strict: true, noEmit: true, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, target: ts.ScriptTarget.ES2022, lib: ["lib.es2022.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"], skipLibCheck: true, types: [], isolatedModules: true };
+  const host = ts.createCompilerHost(options);
+  const norm = (f: string) => f.replace(/\\/g, "/");
+  const base = { fileExists: host.fileExists.bind(host), readFile: host.readFile.bind(host), getSourceFile: host.getSourceFile.bind(host) };
+  host.fileExists = (f) => virtual.has(norm(f)) || base.fileExists(f);
+  host.readFile = (f) => virtual.get(norm(f)) ?? base.readFile(f);
+  const baseDirectoryExists = host.directoryExists?.bind(host);
+  host.directoryExists = (d) => (norm(d).startsWith(dir) ? [...virtual.keys()].some((k) => k.startsWith(norm(d).replace(/\/$/, "") + "/")) : (baseDirectoryExists?.(d) ?? false));
+  host.getSourceFile = (f, language, onError, shouldCreate) => (virtual.has(norm(f)) ? ts.createSourceFile(f, virtual.get(norm(f))!, language) : base.getSourceFile(f, language, onError, shouldCreate));
+  const program = ts.createProgram([...virtual.keys()], options, host);
+  const problems = ts.getPreEmitDiagnostics(program).filter((d) => d.file && virtual.has(norm(d.file.fileName))).map((d) => `${norm(d.file!.fileName).replace(dir, "")}:${d.file!.getLineAndCharacterOfPosition(d.start ?? 0).line + 1} ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
+  assert.deepEqual(problems, [], "no type errors in the composed page");
+}
 console.log("compose: all ok");

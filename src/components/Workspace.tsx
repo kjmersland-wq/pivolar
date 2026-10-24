@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { BarChart3, ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Plug, Rocket, ScanSearch, Server, ShieldCheck, Smartphone, Tablet } from "lucide-react";
+import { BarChart3, ChevronLeft, Code2, Download, ExternalLink, Eye, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Plug, Rocket, ScanSearch, Server, ShieldCheck, Smartphone, Tablet } from "lucide-react";
 import { BudgetDialog } from "@/components/BudgetDialog";
 import { CheckDialog } from "@/components/CheckDialog";
 import { AnalyticsDialog } from "@/components/AnalyticsDialog";
@@ -269,6 +269,18 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
               <MousePointerClick className="size-3.5" />
               <span className="hidden md:inline">{inspect ? "Velger …" : "Velg element"}</span>
             </button>
+          )}
+          {view === "preview" && (
+            <a
+              href={`/p/${id}/full`}
+              target="_blank"
+              rel="noopener"
+              title="Åpne forhåndsvisningen i en egen fane, slik en besøkende ser siden"
+              className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
+            >
+              <ExternalLink className="size-3.5" />
+              <span className="hidden md:inline">Ny fane</span>
+            </a>
           )}
           {view === "preview" && (
             <Segmented

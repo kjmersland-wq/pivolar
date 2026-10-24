@@ -7,7 +7,7 @@ import { composeSite, DEFAULT_SPEC, SECTION_INFO, type SectionId, type Spec } fr
 import { BRAND_SUGGESTIONS, contrast, makePalette } from "@/lib/palette";
 import { cn } from "@/lib/utils";
 
-const ALL: SectionId[] = ["hero", "features", "about", "testimonials", "pricing", "faq", "cta", "contact"];
+const ALL: SectionId[] = ["hero", "features", "about", "testimonials", "pricing", "faq", "cta", "newsletter", "contact", "share"];
 
 const field = "w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-[13.5px] outline-none transition placeholder:text-faint focus:border-line-strong";
 

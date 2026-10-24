@@ -4,7 +4,7 @@
 
 import { makePalette, type Palette } from "./palette.ts";
 
-export type SectionId = "hero" | "features" | "about" | "pricing" | "testimonials" | "faq" | "cta" | "contact";
+export type SectionId = "hero" | "features" | "about" | "pricing" | "testimonials" | "faq" | "cta" | "newsletter" | "contact" | "share";
 
 export type Spec = {
   name: string;
@@ -26,10 +26,12 @@ export const SECTION_INFO: Record<SectionId, { label: string; file: string; anch
   testimonials: { label: "Omtaler", file: "Testimonials", anchor: "omtaler", nav: "Omtaler" },
   faq: { label: "Spørsmål", file: "Faq", anchor: "sporsmal", nav: "Spørsmål" },
   cta: { label: "Oppfordring", file: "Cta", anchor: "", nav: "" },
+  newsletter: { label: "Nyhetsbrev", file: "Newsletter", anchor: "nyhetsbrev", nav: "" },
   contact: { label: "Kontakt", file: "Contact", anchor: "kontakt", nav: "Kontakt" },
+  share: { label: "Del siden", file: "Share", anchor: "", nav: "" },
 };
 
-export const DEFAULT_SECTIONS: SectionId[] = ["hero", "features", "about", "testimonials", "pricing", "faq", "cta", "contact"];
+export const DEFAULT_SECTIONS: SectionId[] = ["hero", "features", "about", "testimonials", "pricing", "faq", "cta", "newsletter", "contact", "share"];
 
 export const DEFAULT_SPEC: Spec = {
   name: "",
@@ -342,6 +344,116 @@ ${
 `;
 }
 
+/** Newsletter sign-up. It posts to /api/subscribe, the function the Resend connector adds, and says so in the preview where it does not exist. */
+function newsletter(c: Ctx) {
+  const { p } = c;
+  return `import { useState, type FormEvent } from "react";
+import { Mail } from "lucide-react";
+
+export default function Newsletter() {
+  const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "ok" | "error">("idle");
+  const [message, setMessage] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setState("sending");
+    try {
+      const response = await fetch("/api/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, website }) });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Påmeldingen virker først etter at siden er publisert og Resend er koblet til.");
+      setState("ok");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Noe gikk galt. Prøv igjen.");
+      setState("error");
+    }
+  }
+
+  return (
+    <section id="nyhetsbrev" className="bg-[${p.bg}] py-16 md:py-20">
+      <div className="mx-auto w-full max-w-2xl px-6 text-center">
+        <Mail className="mx-auto text-[${p.link}]" size={28} />
+        <h2 className="mt-4 text-2xl font-semibold tracking-tight text-[${p.text}] md:text-3xl">Hold deg oppdatert</h2>
+        <p className="mt-3 text-[${p.muted}]">Få nyheter og tilbud rett i innboksen. Du kan melde deg av når som helst.</p>
+        {state === "ok" ? (
+          <p role="status" className="mt-6 rounded-xl bg-[${p.brandSoft}] px-5 py-3 text-sm font-medium text-[${p.link}]">Takk! Du er på listen.</p>
+        ) : (
+          <form onSubmit={(event) => void submit(event)} className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <label className="sr-only" htmlFor="nyhetsbrev-epost">E-postadresse</label>
+            <input id="nyhetsbrev-epost" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="din@epost.no" className="min-w-0 flex-1 rounded-full border border-[${p.border}] bg-[${p.surface}] px-5 py-3 text-sm text-[${p.text}] outline-none focus:border-[${p.brand}]" />
+            <input type="text" name="website" value={website} onChange={(e) => setWebsite(e.target.value)} tabIndex={-1} autoComplete="off" aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 opacity-0" />
+            <button type="submit" disabled={state === "sending"} className="rounded-full bg-[${p.brand}] px-7 py-3 text-sm font-medium text-[${p.onBrand}] transition hover:bg-[${p.brandStrong}] disabled:opacity-60">
+              {state === "sending" ? "Melder på …" : "Meld meg på"}
+            </button>
+          </form>
+        )}
+        {state === "error" ? <p role="alert" className="mt-3 text-sm text-red-500">{message}</p> : null}
+      </div>
+    </section>
+  );
+}
+`;
+}
+
+/** A row of share buttons for the social networks. They open each network's own share page with the address of this page. */
+function share(c: Ctx) {
+  const { p } = c;
+  return `import { useState } from "react";
+import { Link2, Share2 } from "lucide-react";
+
+const NETWORKS = [
+  { name: "Facebook", href: (url: string) => "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(url) },
+  { name: "X", href: (url: string, text: string) => "https://twitter.com/intent/tweet?url=" + encodeURIComponent(url) + "&text=" + encodeURIComponent(text) },
+  { name: "LinkedIn", href: (url: string) => "https://www.linkedin.com/sharing/share-offsite/?url=" + encodeURIComponent(url) },
+  { name: "WhatsApp", href: (url: string, text: string) => "https://wa.me/?text=" + encodeURIComponent(text + " " + url) },
+  { name: "E-post", href: (url: string, text: string) => "mailto:?subject=" + encodeURIComponent(text) + "&body=" + encodeURIComponent(url) },
+];
+
+export default function Share() {
+  const [copied, setCopied] = useState(false);
+  const text = ${str(c.name)};
+  const address = () => (typeof window === "undefined" ? "" : window.location.href.split("#")[0] ?? "");
+
+  function open(href: string) {
+    if (href.startsWith("mailto:")) window.location.href = href;
+    else window.open(href, "_blank", "noopener,noreferrer,width=640,height=560");
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(address());
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // The browser did not allow it: the address stays in the address bar.
+    }
+  }
+
+  const button = "inline-flex items-center gap-2 rounded-full border border-[${p.border}] bg-[${p.surface}] px-4 py-2 text-sm text-[${p.text}] transition hover:border-[${p.brand}]";
+  return (
+    <section className="bg-[${p.bg}] py-10">
+      <div className="${WRAP} flex flex-wrap items-center justify-center gap-3">
+        <span className="inline-flex items-center gap-2 text-sm text-[${p.muted}]">
+          <Share2 size={16} />
+          Del siden
+        </span>
+        {NETWORKS.map((network) => (
+          <button key={network.name} type="button" className={button} onClick={() => open(network.href(address(), text))} aria-label={"Del på " + network.name}>
+            {network.name}
+          </button>
+        ))}
+        <button type="button" className={button} onClick={() => void copy()}>
+          <Link2 size={14} />
+          {copied ? "Kopiert" : "Kopier lenke"}
+        </button>
+      </div>
+    </section>
+  );
+}
+`;
+}
+
 function footer(c: Ctx) {
   const { p } = c;
   return `export default function Footer() {
@@ -372,7 +484,7 @@ export function composeSite(input: Spec): Record<string, string> {
   const chosen = spec.sections.filter((id, i, all) => all.indexOf(id) === i && id in SECTION_INFO);
   const links = chosen.filter((id) => SECTION_INFO[id].nav).map((id) => ({ label: SECTION_INFO[id].nav, anchor: SECTION_INFO[id].anchor }));
 
-  const builders: Record<SectionId, (ctx: Ctx) => string> = { hero, features, about, pricing, testimonials, faq, cta, contact };
+  const builders: Record<SectionId, (ctx: Ctx) => string> = { hero, features, about, pricing, testimonials, faq, cta, newsletter, contact, share };
   const files: Record<string, string> = { "/components/Navbar.tsx": navbar(c, links), "/components/Footer.tsx": footer(c) };
   for (const id of chosen) files[`/components/${SECTION_INFO[id].file}.tsx`] = builders[id](c);
 

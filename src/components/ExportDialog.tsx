@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Check, Download, Loader2, X } from "lucide-react";
+import { AlertTriangle, Check, Download, ExternalLink, GitBranch, Loader2, X } from "lucide-react";
 import type { FileMap } from "@/lib/files";
 import { loadImportInfo } from "@/lib/projects";
+import { slugify } from "@/lib/publish/project";
 import type { Manifest } from "@/lib/zip/export";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,11 @@ export function ExportDialog({ open, onClose, projectId, name, files }: { open: 
   const [dry, setDry] = useState<Dry | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Sending the project to a GitHub repository, without publishing it anywhere.
+  const [repo, setRepo] = useState("");
+  const [isPrivate, setIsPrivate] = useState(true);
+  const [github, setGithub] = useState<{ ready: boolean } | null>(null);
+  const [push, setPush] = useState<{ status: "idle" | "running" | "done" | "error"; url?: string; message?: string }>({ status: "idle" });
 
   const request = (extra: object) =>
     fetch("/api/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, files, mode: native ? mode : "source", notes: { skippedBinaries: loadImportInfo(projectId)?.skippedBinaries ?? [], omittedSecrets: loadImportInfo(projectId)?.omittedSecrets ?? [] }, ...extra }) });
@@ -29,6 +35,12 @@ export function ExportDialog({ open, onClose, projectId, name, files }: { open: 
     setDry(null);
     setError("");
     /* eslint-enable react-hooks/set-state-in-effect */
+    setRepo(slugify(name));
+    setPush({ status: "idle" });
+    fetch("/api/publish")
+      .then((r) => r.json() as Promise<{ github?: boolean }>)
+      .then((c) => !cancelled && setGithub({ ready: Boolean(c.github) }))
+      .catch(() => !cancelled && setGithub({ ready: false }));
     request({ dryRun: true })
       .then(async (response) => {
         const body = (await response.json()) as Dry & { error?: string };
@@ -42,6 +54,40 @@ export function ExportDialog({ open, onClose, projectId, name, files }: { open: 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- request reads the current files and mode
   }, [open, mode]);
+
+  /** Builds the project as a normal Vite project and puts it in one commit in a GitHub repository. Nothing is deployed. */
+  async function sendToGitHub() {
+    setPush({ status: "running" });
+    try {
+      const response = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: slugify(repo), files, isPrivate, host: "vercel", targets: { github: true, vercel: false }, projectId }),
+      });
+      if (!response.ok || !response.body) {
+        const text = response.status === 429 ? "For mange forsøk. Vent litt og prøv igjen." : "Kunne ikke sende til GitHub.";
+        return setPush({ status: "error", message: text });
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: { status: "done" | "error"; url?: string; message?: string } | null = null;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines.filter(Boolean)) {
+          const event = JSON.parse(line) as { step?: string; status?: string; url?: string; message?: string };
+          if (event.step === "github" && (event.status === "done" || event.status === "error")) result = { status: event.status, ...(event.url ? { url: event.url } : {}), ...(event.message ? { message: event.message } : {}) };
+        }
+      }
+      setPush(result ?? { status: "error", message: "Fikk ikke svar fra GitHub." });
+    } catch (e) {
+      setPush({ status: "error", message: e instanceof Error ? e.message : "Noe gikk galt." });
+    }
+  }
 
   async function download() {
     setBusy(true);
@@ -139,6 +185,46 @@ export function ExportDialog({ open, onClose, projectId, name, files }: { open: 
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
                 Last ned ZIP
               </button>
+
+              {native && (
+                <div className="space-y-3 border-t border-line pt-4">
+                  <p className="flex items-center gap-2 text-[13.5px] font-medium">
+                    <GitBranch className="size-4" />
+                    Eksporter til GitHub
+                  </p>
+                  <p className="text-[12.5px] text-muted">Legger prosjektet som et ferdig Vite-prosjekt i et GitHub-repo, i én commit. Ingenting publiseres noe sted, og ingen nøkler følger med.</p>
+                  {github && !github.ready ? (
+                    <p className="text-[12.5px] text-amber-400">GitHub er ikke koblet til. Legg inn GITHUB_TOKEN i miljøvariablene.</p>
+                  ) : (
+                    <>
+                      <label className="block text-[12.5px] text-muted">
+                        Navn på repoet
+                        <input value={repo} onChange={(e) => setRepo(e.target.value)} disabled={push.status === "running"} spellCheck={false} className="mt-1 w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2 text-[14px] text-fg outline-none transition focus:border-line-strong" />
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2.5 text-[12.5px] text-muted">
+                        <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} disabled={push.status === "running"} className="size-4 accent-[var(--accent)]" />
+                        Privat repo
+                      </label>
+                      <button type="button" onClick={() => void sendToGitHub()} disabled={!github || push.status === "running" || slugify(repo).length < 1} className="flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-surface-2 py-2.5 text-[13.5px] font-medium transition enabled:hover:border-line-strong disabled:opacity-50">
+                        {push.status === "running" ? <Loader2 className="size-4 animate-spin" /> : <GitBranch className="size-4" />}
+                        Send til GitHub
+                      </button>
+                    </>
+                  )}
+                  {push.status === "done" && push.url && (
+                    <p className="flex flex-wrap items-center gap-2 text-[12.5px] text-emerald-400">
+                      <Check className="size-4" />
+                      Lagt i repoet.
+                      <a href={push.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 break-all text-accent hover:underline">
+                        {push.url}
+                        <ExternalLink className="size-3" />
+                      </a>
+                    </p>
+                  )}
+                  {push.status === "done" && push.message && <p className="text-[12.5px] text-amber-400">{push.message}</p>}
+                  {push.status === "error" && <p className="text-[12.5px] text-red-400">{push.message}</p>}
+                </div>
+              )}
             </div>
           </motion.div>
         </motion.div>

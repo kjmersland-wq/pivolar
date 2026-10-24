@@ -232,3 +232,9 @@ produkter [offentlig]: navn text!, pris tall
 - **Etterpå:** kjør SQL-en, slå på e-postinnlogging og legg til sidens adresse under Authentication → URL Configuration. Publisering legger SQL-en i `supabase/` i prosjektet, ikke under `src/`.
 
 Under tabellfeltet kan eieren skrive en setning om appen og trykke «Foreslå tabeller med AI» (`/api/backend/suggest`). AI-en fyller bare ut et lite skjema (tabeller, kolonner, typer, og om noe skal være offentlig). Svaret skrives som linjer og leses av nøyaktig de samme kontrollene som tabeller skrevet for hånd: en tabell som ikke består (opptatte ord, ugyldige navn) utelates hel, og høyst 10 tabeller slipper gjennom. Eieren ser linjene i feltet og kan endre dem før noe lages. Samme porter som chatten gjelder (innlogget, AI av/på, døgntak, budsjett), pluss egen kvote på 15 forslag i timen, høyst 1 000 tokens ut og 40 sekunder.
+
+## Fra prosjektet til nettleseren og GitHub
+
+- **Ny fane:** knappen «Ny fane» i verktøylinjen åpner forhåndsvisningen alene i en egen nettleserfane (`/p/<id>/full`), slik en besøkende ser siden. Fanen leser det samme prosjektet og følger med mens AI-en bygger i den andre fanen.
+- **Eksporter til GitHub:** i eksportdialogen kan et Pivolar-prosjekt sendes til et GitHub-repo som et ferdig Vite-prosjekt, i én commit, uten at noe publiseres noe sted og uten nøkler. Valg av repo-navn og privat/offentlig. Bruker `GITHUB_TOKEN` og publiseringsruten med bare GitHub slått på. Importerte prosjekter sendes som pull request i stedet.
+- **Nyhetsbrev og del-rad i «Sett sammen»:** to nye seksjoner. Nyhetsbrevet har et e-postfelt med skjult felt mot spam og sender til `/api/subscribe`, funksjonen Resend-koblingen legger inn (forhåndsvisningen sier fra at den virker først etter publisering). Del-raden har knapper for Facebook, X, LinkedIn, WhatsApp, e-post og «Kopier lenke», som åpner hvert nettverks egen delingsside uten skript fra dem.
