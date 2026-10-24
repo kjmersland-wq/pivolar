@@ -57,6 +57,23 @@ assert.deepEqual(searchConnectors("finnes ikke xyz"), []);
   assert.deepEqual(envFor({ mailgun: { apiKey: "key-abcdefghijklmnopqrst", domain: "mg.eksempel.no", to: "a@b.no" } }), { MAILGUN_API_KEY: "key-abcdefghijklmnopqrst", MAILGUN_DOMAIN: "mg.eksempel.no", MAILGUN_TO: "a@b.no" });
 }
 
+// --- stores, content and AI: formats are checked, and costly calls are asked to be guarded
+{
+  const shopify = connectorById("shopify")!;
+  assert.equal(shopify.kind, "client");
+  assert.equal(validate(shopify, { domain: "min-butikk.myshopify.com", token: "abcdefghijklmnopqrstuvwx" }), null);
+  assert.match(validate(shopify, { domain: "https://min-butikk.myshopify.com", token: "abcdefghijklmnopqrstuvwx" })!, /myshopify\.com/);
+  assert.match(shopify.request({ domain: "min-butikk.myshopify.com", token: "abc" }), /Storefront API[\s\S]*cartCreate[\s\S]*Bruk aldri Admin-API-et/);
+  assert.equal(connectorById("storyblok")!.kind, "client");
+  const woo = connectorById("woocommerce")!;
+  assert.deepEqual(envFor({ woocommerce: { url: "https://b.no", key: "ck_" + "a".repeat(30), secret: "cs_" + "b".repeat(30) } }), { WOOCOMMERCE_URL: "https://b.no", WOOCOMMERCE_KEY: "ck_" + "a".repeat(30), WOOCOMMERCE_SECRET: "cs_" + "b".repeat(30) });
+  assert.match(validate(woo, { url: "http://b.no", key: "ck_" + "a".repeat(30), secret: "cs_" + "b".repeat(30) })!, /https/);
+  assert.match(connectorById("gemini")!.request({}), /én forespørsel per besøkende per minutt/);
+  assert.match(connectorById("semrush")!.request({}), /koster API-enheter/);
+  assert.match(connectorById("apollo")!.request({}), /koster kreditter/);
+  assert.equal(connectorById("shopify")!.kind === "client" && CONNECTORS.filter((c) => c.kind === "soon").length, 20, "the rest still needs a sign-in flow");
+}
+
 // --- client connectors: public values go straight into the request
 {
   const ga = connectorById("google-analytics")!;

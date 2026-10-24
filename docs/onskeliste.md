@@ -9,7 +9,10 @@ Ting som er bestilt men ikke bygget. Koblingene legges inn i `src/lib/connectors
 ## Analyse (bygget første versjon: knappen Analyse; mangler «Kjør annonser» og SEO-skanning med oppfølging)
 Besøk siste 7 dager som kurve, fordelt på kilde (SEO og AI-søk, SoMe, henvisninger, direkte, annonser), mest besøkte sider, land og enheter, og antall som er inne akkurat nå. Krever egen telling på de publiserte sidene (en liten /api/-funksjon og lagring, uten cookies, slik at samtykkebanner ikke trengs), og lenker fra SEO-fanen (hvilke søkemotorer som sender besøk). Google Analytics-koblingen er en enklere start.
 
-## Koblinger det er ønsket å ha
+## Gjenstår på koblingene
+Vises som «Kommer» fordi de krever innlogging via OAuth (egen app hos tjenesten, godkjenning, token som fornyes): Gmail, Google Drive, Sheets, Docs, Slides, Calendar, Business Profile, Ads, BigQuery, Firebase Cloud Messaging, Outlook, Teams, Salesforce, Wave, Zoho Books, LinkedIn, X, Wix, Lightspeed og Clay. Bygges som én felles OAuth-flyt, ikke én og én.
+
+## Koblinger det er ønsket å ha (hele listen, også de som er bygget)
 - **Betaling:** Paddle og Stripe (første versjon er bygget), Creem.
 - **E-post og nyhetsbrev:** Resend (bygget), Brevo, Mailgun, Gmail, Microsoft Outlook, automatiske nyhetsbrev (utsending etter plan).
 - **Meldinger og varsler:** Slack, Telegram, Discord, Microsoft Teams, WhatsApp Business, Twilio (SMS), GatewayAPI (SMS/RCS), Firebase Cloud Messaging (push).

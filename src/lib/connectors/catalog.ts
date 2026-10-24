@@ -102,6 +102,33 @@ export const CLIENT: Connector[] = [
       `Lag en liten Logo-komponent som viser firmalogoen for et domene: <img src={\`https://img.logo.dev/\${domain}?token=${clean(v.token)}&size=80&format=png\`} alt={\`\${name}-logo\`} width={40} height={40} loading="lazy"> med fallback til firmanavnet som tekst når bildet feiler (onError). Bruk den i en rad med partnere eller kunder på siden om det passer. ${KEEP_LOOK}`,
     after: "",
   },
+  {
+    id: "shopify",
+    name: "Shopify",
+    category: "ecommerce",
+    kind: "client",
+    summary: "Vis produkter fra Shopify-butikken din på siden og send kunden til Shopifys kasse.",
+    docs: "https://shopify.dev/docs/api/storefront",
+    fields: [
+      { key: "domain", label: "Butikkens myshopify-adresse", placeholder: "dinbutikk.myshopify.com", pattern: /^[a-z0-9-]+\.myshopify\.com$/i, error: "Adressen ser ut som dinbutikk.myshopify.com (uten https://)." },
+      { key: "token", label: "Storefront-tilgangstoken", placeholder: "…", help: "Shopify admin → Apps → Develop apps → Storefront API. Tokenet er laget for å brukes i nettleseren. Gi det bare lesetilgang til produkter og tilgang til handlekurv.", pattern: /^[\w-]{20,}$/, error: "Skriv inn Storefront-tokenet (ikke Admin-tokenet)." },
+    ],
+    request: (v) =>
+      `Legg til en produktseksjon som henter produkter fra Shopify Storefront API (GraphQL) på https://${clean(v.domain)}/api/<nyeste stabile versjon fra dokumentasjonen>/graphql.json med headeren X-Shopify-Storefront-Access-Token: ${clean(v.token)}. Hent de 12 første produktene (tittel, featuredImage med alt, priceRange.minVariantPrice, første variant-ID) og vis dem som kort med bilde, navn, pris og en «Kjøp»-knapp. Knappen oppretter en handlekurv med cartCreate-mutasjonen (én vare) og sender kunden til checkoutUrl. Vis lastetilstand, feilmelding og tom tilstand. Bruk aldri Admin-API-et. ${KEEP_LOOK}`,
+    after: "Storefront-tokenet synes i sidens kode. Det er laget for det, men bruk aldri Admin-API-nøkkelen her.",
+  },
+  {
+    id: "storyblok",
+    name: "Storyblok",
+    category: "marketing",
+    kind: "client",
+    summary: "Hent innhold fra Storyblok (tekster, artikler) og vis det på siden, så andre kan redigere uten kode.",
+    docs: "https://www.storyblok.com/docs/api/content-delivery/v2",
+    fields: [{ key: "token", label: "Offentlig tilgangstoken", placeholder: "…", help: "Storyblok → Settings → Access Tokens → Public (ikke Preview eller Management).", pattern: /^[A-Za-z0-9]{20,}$/, error: "Skriv inn det offentlige tokenet (bare bokstaver og tall)." }],
+    request: (v) =>
+      `Hent publisert innhold fra Storyblok Content Delivery API (https://api.storyblok.com/v2/cdn/stories?version=published&token=${clean(v.token)}, se dokumentasjonen for riktig region) og vis historiene som en liste med tittel, utdrag og lenke (bruk full_slug). Vis lastetilstand, feilmelding og tom tilstand. Bruk bare dette offentlige tokenet. ${KEEP_LOOK}`,
+    after: "Det offentlige tokenet gir bare lesetilgang til publisert innhold.",
+  },
 ];
 
 const EMAIL_FORM = "Legg til et påmeldings- eller kontaktskjema på siden som sender til funksjonen.";
@@ -120,22 +147,21 @@ export const ASSISTED: Connector[] = [
   assisted({ id: "whatsapp", name: "WhatsApp Business", category: "messaging", summary: "Send meldinger via WhatsApp Business Cloud API.", docs: "https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-messages", fields: [key("token", "Tilgangstoken", "WHATSAPP_TOKEN", "EAA…", { pattern: /^[\w-]{30,}$/, error: "Skriv inn tilgangstokenet fra Meta." }), plain("phone", "Telefonnummer-ID", "WHATSAPP_PHONE_NUMBER_ID", "1234567890", { pattern: /^\d{8,}$/, error: "Telefonnummer-ID er et langt tall." })], purpose: "Funksjonen sender en mal-melding (template) via WhatsApp Cloud API. Meld fra i svaret til siden at WhatsApp bare tillater maler til nye kontakter.", ui: "Legg til en «Chat på WhatsApp»-knapp på siden." }),
   assisted({ id: "notion", name: "Notion", category: "productivity", summary: "Lagre skjemainnsendinger som rader i en Notion-database.", docs: "https://developers.notion.com/reference/post-page", fields: [key("token", "Integrasjonstoken", "NOTION_TOKEN", "ntn_… eller secret_…", { pattern: /^(ntn|secret)_[\w]{20,}$/, error: "Tokenet starter med ntn_ eller secret_." }), plain("db", "Database-ID", "NOTION_DATABASE_ID", "32 tegn", { pattern: /^[0-9a-f]{32}$|^[0-9a-f-]{36}$/i, error: "Database-ID er 32 tegn (fra adressen til databasen)." })], purpose: "Funksjonen oppretter en ny side (rad) i databasen med feltene fra skjemaet. Databasen må være delt med integrasjonen.", ui: "Legg til et kontaktskjema på siden som sender til funksjonen." }),
   assisted({ id: "airtable", name: "Airtable", category: "productivity", summary: "Lagre skjemainnsendinger som rader i en Airtable-tabell.", docs: "https://airtable.com/developers/web/api/create-records", fields: [key("token", "Personlig tilgangstoken", "AIRTABLE_TOKEN", "pat…", { pattern: /^pat[\w.]{20,}$/, error: "Tokenet starter med pat." }), plain("base", "Base-ID", "AIRTABLE_BASE_ID", "app…", { pattern: /^app[\w]{10,}$/, error: "Base-ID starter med app." }), plain("table", "Tabellnavn", "AIRTABLE_TABLE", "Henvendelser", { pattern: /^[\w .-]{1,60}$/, error: "Skriv inn tabellnavnet." })], purpose: "Funksjonen oppretter en ny rad i tabellen med feltene fra skjemaet. Gi tokenet bare tilgang til denne basen og bare skrive.", ui: "Legg til et kontaktskjema på siden som sender til funksjonen." }),
+  assisted({ id: "woocommerce", name: "WooCommerce", category: "ecommerce", summary: "Vis produkter fra en WooCommerce-butikk (WordPress) og send kunden til kassen.", docs: "https://woocommerce.github.io/woocommerce-rest-api-docs/", fields: [plain("url", "Butikkens adresse", "WOOCOMMERCE_URL", "https://dinbutikk.no", { pattern: /^https:\/\/[\w.-]+(\/[\w./-]*)?$/, error: "Adressen starter med https://." }), key("key", "Consumer key", "WOOCOMMERCE_KEY", "ck_…", { pattern: /^ck_[a-f0-9]{20,}$/i, error: "Consumer key starter med ck_." }), key("secret", "Consumer secret", "WOOCOMMERCE_SECRET", "cs_…", { pattern: /^cs_[a-f0-9]{20,}$/i, error: "Consumer secret starter med cs_." })], purpose: "Funksjonen henter publiserte produkter (bare lesing, maks 12) fra butikkens REST API og svarer med navn, pris, bilde og produktadresse. Gi nøklene bare lesetilgang.", ui: "Legg til en produktseksjon som viser produktene som kort med bilde, navn, pris og en «Kjøp»-lenke til produktets side i butikken." }),
+  assisted({ id: "prestashop", name: "PrestaShop", category: "ecommerce", summary: "Vis produkter fra en PrestaShop-butikk og lenk til kassen.", docs: "https://devdocs.prestashop-project.org/9/webservice/", fields: [plain("url", "Butikkens adresse", "PRESTASHOP_URL", "https://dinbutikk.no", { pattern: /^https:\/\/[\w.-]+(\/[\w./-]*)?$/, error: "Adressen starter med https://." }), key("key", "Webservice-nøkkel", "PRESTASHOP_KEY", "…", { pattern: /^[A-Z0-9]{20,40}$/, error: "Webservice-nøkkelen er 32 tegn, store bokstaver og tall." })], purpose: "Funksjonen henter aktive produkter (bare lesing, maks 12) fra webservice-API-et og svarer med navn, pris, bilde og adresse. Gi nøkkelen bare lesetilgang til products og images.", ui: "Legg til en produktseksjon som viser produktene som kort med bilde, navn, pris og en «Kjøp»-lenke til butikken." }),
+  assisted({ id: "semrush", name: "Semrush", category: "marketing", summary: "Hent nøkkelord og søkevolum fra Semrush, for eksempel til en SEO-oversikt for deg selv.", docs: "https://developer.semrush.com/api/", fields: [key("apiKey", "API-nøkkel", "SEMRUSH_API_KEY", "…", { pattern: /^[a-f0-9]{20,}$/i, error: "Skriv inn API-nøkkelen fra Semrush." })], purpose: "Funksjonen tar et nøkkelord og svarer med søkevolum og beslektede nøkkelord. Hvert kall koster API-enheter hos Semrush: avvis tekst over 80 tegn og tillat bare innlogget eier å kalle den, eller beskytt den med en hemmelig header du lagrer i en miljøvariabel.", ui: "Legg til en liten side bare for deg selv (skjult fra menyen) med et søkefelt for nøkkelord." }),
+  assisted({ id: "apollo", name: "Apollo.io", category: "sales", summary: "Finn og berik kontakter og selskaper til salg (B2B).", docs: "https://docs.apollo.io/", fields: [key("apiKey", "API-nøkkel", "APOLLO_API_KEY", "…", { pattern: /^[\w-]{15,}$/, error: "Skriv inn API-nøkkelen fra Apollo." })], purpose: "Funksjonen tar et domenenavn og svarer med grunnleggende selskapsinfo (organization enrichment). Hvert kall koster kreditter: avvis alt som ikke er et gyldig domene, og beskytt funksjonen med en hemmelig header du lagrer i en miljøvariabel.", ui: "Legg til en liten side bare for deg selv (skjult fra menyen) der du skriver inn et domene og får selskapsinfo." }),
+  assisted({ id: "gemini", name: "Gemini (AI)", category: "google", summary: "La siden stille spørsmål til Googles AI-modeller, for eksempel en liten assistent.", docs: "https://ai.google.dev/gemini-api/docs", fields: [key("apiKey", "API-nøkkel", "GEMINI_API_KEY", "AIza…", { pattern: /^AIza[\w-]{30,}$/, error: "Nøkkelen starter med AIza (fra Google AI Studio)." })], purpose: "Funksjonen tar en kort tekst (maks 500 tegn) og svarer med modellens svar. Hvert kall koster penger, så begrens: én forespørsel per besøkende per minutt med en enkel teller i minnet, avvis lange tekster, sett maks lengde på svaret, og bruk en fast systeminstruksjon som holder svarene til siden sitt tema.", ui: "Legg til en liten assistent på siden: et felt der den besøkende skriver et spørsmål, og et svarfelt med lastetilstand og feilmelding." }),
   assisted({ id: "chargebee", name: "Chargebee", category: "ecommerce", summary: "Abonnement og fakturering. Send kunden til en Chargebee-betalingsside.", docs: "https://apidocs.chargebee.com/docs/api/hosted_pages", fields: [plain("site", "Site-navn", "CHARGEBEE_SITE", "dittfirma-test", { pattern: /^[a-z0-9-]{3,}$/i, error: "Site-navnet er første del av adressen din hos Chargebee." }), key("apiKey", "API-nøkkel", "CHARGEBEE_API_KEY", "test_…", { pattern: /^(test|live)_[\w]{20,}$/, error: "Nøkkelen starter med test_ eller live_." }), plain("plan", "Plan-ID (item price)", "CHARGEBEE_ITEM_PRICE_ID", "premium-EUR-Monthly", { pattern: /^[\w-]{3,}$/, error: "Skriv inn pris-ID-en for planen." })], purpose: "Funksjonen oppretter en hosted checkout-side for abonnementet (CHARGEBEE_ITEM_PRICE_ID) og svarer med adressen.", ui: "Legg til en «Abonner»-knapp som kaller funksjonen og sender kunden videre til adressen den svarer med." }),
 ];
 
 export const SOON: Connector[] = [
-  soon("shopify", "Shopify", "ecommerce", "Bygg en nettbutikk med produkter fra Shopify."),
-  soon("woocommerce", "WooCommerce", "ecommerce", "Åpen nettbutikk-plattform for WordPress."),
-  soon("prestashop", "PrestaShop", "ecommerce", "Åpen nettbutikk-plattform."),
   soon("wix", "Wix", "ecommerce", "Nettsted, nettbutikk og booking."),
   soon("lightspeed", "Lightspeed", "ecommerce", "Kasse, varelager og salg."),
   soon("wave", "Wave", "ecommerce", "Regnskap og fakturering for småbedrifter."),
   soon("zoho-books", "Zoho Books", "ecommerce", "Regnskap og fakturering."),
   soon("linkedin", "LinkedIn", "marketing", "Profil og innlegg på LinkedIn."),
   soon("x", "X (Twitter)", "marketing", "Innlegg, brukere og trender fra X."),
-  soon("semrush", "Semrush", "marketing", "SEO, nøkkelord og konkurrentanalyse."),
-  soon("storyblok", "Storyblok", "marketing", "Headless CMS med visuell sidebygger."),
-  soon("apollo", "Apollo.io", "sales", "Søk og berik B2B-kontakter og selskaper."),
   soon("clay", "Clay", "sales", "Salgsdata: personer og selskaper."),
   soon("salesforce", "Salesforce", "sales", "CRM og salgsdata."),
   soon("gmail", "Gmail", "google", "Les, send og administrer e-post."),
@@ -146,7 +172,6 @@ export const SOON: Connector[] = [
   soon("google-calendar", "Google Calendar", "google", "Lag og administrer avtaler."),
   soon("google-business", "Google Business Profile", "google", "Steder, anmeldelser og innsikt."),
   soon("google-ads", "Google Ads", "google", "Kjør annonsekampanjer."),
-  soon("gemini", "Gemini", "google", "Bygg med Googles AI-modeller."),
   soon("bigquery", "BigQuery", "google", "Spør og analyser data."),
   soon("fcm", "Firebase Cloud Messaging", "google", "Send push-varsler til enheter."),
   soon("outlook", "Microsoft Outlook", "microsoft", "Les, send og administrer e-post og kalender."),
