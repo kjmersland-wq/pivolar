@@ -147,3 +147,13 @@ Importrapporten viser gruppen og anbefalt vert. Knappen **Hosting** i et prosjek
 - `src/lib/import/skeleton.ts` lager det AI-en senere skal lese: strukturen og noen få ord per tekst. Selve teksten ligger i `slots` og går aldri gjennom modellen.
 
 Ikke på plass ennå: nedlasting av bildene til Supabase Storage, lagring av modellen i databasen, grensesnitt, og Joomla, Drupal, Wix og Squarespace.
+
+### Bilder fra importen
+
+`fetch` lagrer sider og bildeliste som en jobb (`import_jobs`). `images` henter så de neste bildene, noen få om gangen (hvert kall jobber høyst 45 sekunder og kan gjentas til `status` er `images_done`). `get` gir modellen med bildene fylt inn, der bildeadressene er byttet ut med `/images/<fil>`.
+
+Hvert bilde hentes gjennom den sikre henteren (og `robots.txt`), sjekkes på de første bytene i stedet for på filtypen nettstedet oppgir, skaleres til maks 2000 piksler og lagres på nytt som WebP. Da forsvinner posisjon, kamera og forfatter fra bildet, og alt som lå skjult i filen. Bildet lagres én gang under et navn laget av innholdet (samme bilde brukt flere steder blir én fil). SVG tas ikke inn, siden den kan inneholde script.
+
+Grenser: 400 bilder, 10 MB per bilde, 150 MB nedlasting per import, 50 millioner piksler per bilde, og 500 MB lagret per bruker. Filene ligger i bøtta `pivolar-assets` under brukerens egen mappe. Bilder som ikke kan lagres beholder den gamle adressen og står i advarslene.
+
+Oppsett: kjør `supabase/migrations/20261024180000_pivolar_import_assets.sql` i Supabase.

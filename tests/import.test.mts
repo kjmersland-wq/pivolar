@@ -407,8 +407,9 @@ function wpSite(options: { rest?: boolean; robots?: string; wordpress?: boolean;
 // --- the route and what is allowed through it
 {
   const route = read("src/app/api/import/cms/route.ts");
-  assert.match(route, /await limit\("import"\)/, "rate limit and the on/off switch come first");
-  assert.ok(route.indexOf('limit("import")') < route.indexOf("request.json()"));
+  assert.match(route, /await limit\(step \? "importstep" : "import"\)/, "rate limit and the on/off switch come first");
+  assert.ok(route.indexOf("content-length") < route.indexOf("request.json()"), "a large body is refused before it is read");
+  assert.ok(route.indexOf("await limit(") < route.indexOf("await probeWordPress"), "and the allowance is counted before anything is fetched");
   assert.match(route, /confirmOwner: z\.literal\(true\)/, "the owner must say the site is theirs");
   assert.doesNotMatch(route, /\bfetch\(/, "the route fetches nothing itself");
   assert.doesNotMatch(route, /openAiGate|streamText|generateText/, "the import uses no AI");

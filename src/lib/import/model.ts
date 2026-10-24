@@ -56,6 +56,10 @@ export type Media = {
   height?: number;
   /** The ids of the pages that show it. */
   usedBy: string[];
+  /** Set once the picture is stored in Pivolar: the file name in the project (/images/<file>) and what it became. */
+  stored?: { file: string; hash: string; bytes: number; width: number; height: number };
+  /** Set when it could not be stored, and why. */
+  failed?: string;
 };
 
 export type SiteModel = {

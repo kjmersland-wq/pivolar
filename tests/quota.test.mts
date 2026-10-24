@@ -237,7 +237,7 @@ const now = Date.parse("2026-10-24T10:00:00Z");
   assert.ok(chat.indexOf("openAiGate(") < chat.indexOf("await request.json()"), "the checks come before the body is read");
   assert.match(chat, /content-length/);
   for (const [path, route] of [["analyze", "analyze"], ["import/zip", "import"], ["import/cms", "import"], ["github/import", "import"], ["export", "export"], ["github/pull-request", "pr"], ["publish", "publish"], ["runner", "runner"]] as const) {
-    assert.match(read(`src/app/api/${path}/route.ts`), new RegExp(`limit\\("${route}"\\)`), `${path} is rate limited`);
+    assert.match(read(`src/app/api/${path}/route.ts`), new RegExp(`limit\\((?:step \\? "importstep" : )?"${route}"\\)`), `${path} is rate limited`);
   }
   const runner = read("src/app/api/runner/route.ts");
   assert.match(runner, /sandboxName\(userId, id\)/, "the run is named after the user");

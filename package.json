@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node tests/direct-edit.test.mts && node tests/compose.test.mts && node tests/zip.test.mts && node tests/images.test.mts && node tests/publish.test.mts && node tests/image-gen.test.mts && node tests/usage.test.mts && node tests/analyze.test.mts && node tests/compare.test.mts && node tests/context.test.mts && node tests/guard.test.mts && node tests/explain.test.mts && node tests/checks.test.mts && node tests/github.test.mts && node tests/github-pr.test.mts && node tests/sandbox-map.test.mts && node tests/runner.test.mts && node tests/seo.test.mts && node tests/connectors.test.mts && node tests/security-pack.test.mts && node tests/analytics.test.mts && node tests/oauth.test.mts && node tests/hosting.test.mts && node tests/quota.test.mts && node tests/stack.test.mts && node tests/import.test.mts"
+    "test": "node tests/direct-edit.test.mts && node tests/compose.test.mts && node tests/zip.test.mts && node tests/images.test.mts && node tests/publish.test.mts && node tests/image-gen.test.mts && node tests/usage.test.mts && node tests/analyze.test.mts && node tests/compare.test.mts && node tests/context.test.mts && node tests/guard.test.mts && node tests/explain.test.mts && node tests/checks.test.mts && node tests/github.test.mts && node tests/github-pr.test.mts && node tests/sandbox-map.test.mts && node tests/runner.test.mts && node tests/seo.test.mts && node tests/connectors.test.mts && node tests/security-pack.test.mts && node tests/analytics.test.mts && node tests/oauth.test.mts && node tests/hosting.test.mts && node tests/quota.test.mts && node tests/stack.test.mts && node tests/import.test.mts && node tests/media.test.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.86",
@@ -28,6 +28,7 @@
     "puppeteer-core": "^25.16.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "sharp": "^0.35.5",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"
   },
