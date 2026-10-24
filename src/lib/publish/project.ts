@@ -1,4 +1,6 @@
 import { trackingSnippet } from "../analytics/snippet.ts";
+import type { HostId } from "../hosting/catalog.ts";
+import { hostFiles } from "../hosting/files.ts";
 import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, type FileMap } from "../files.ts";
 import { metaTags, readBrand, type Brand } from "./brand.ts";
 
@@ -253,7 +255,7 @@ const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ "&": "&am
  * builds on Vercel. Paths move under src/, the sandbox-only files are left out, and Tailwind is
  * installed properly (the preview loads it from a CDN, a real build must not).
  */
-export function buildDeployableProject(files: FileMap, title: string, options: { icons?: boolean; analytics?: { origin: string; projectId: string } } = {}): Record<string, string> {
+export function buildDeployableProject(files: FileMap, title: string, options: { icons?: boolean; analytics?: { origin: string; projectId: string }; host?: HostId } = {}): Record<string, string> {
   const slug = slugify(title);
   const brand = readBrand(files, title);
   const counter = options.analytics ? trackingSnippet(options.analytics.origin, options.analytics.projectId) : "";
@@ -296,6 +298,8 @@ export function buildDeployableProject(files: FileMap, title: string, options: {
     out[relative.startsWith("public/") || relative.startsWith("api/") ? relative : `src/${relative}`] = code;
   }
   out["src/styles.css"] = buildStyles(files["/styles.css"] ?? "");
+  // Settings for the chosen host sit next to the site, and never replace a file the site already has.
+  for (const [path, content] of Object.entries(hostFiles(options.host ?? "vercel", slug))) if (!(path in out)) out[path] = content;
 
   if (!out["src/App.tsx"]) throw new Error("Prosjektet mangler /App.tsx.");
   return out;

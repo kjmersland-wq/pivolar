@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ExternalLink, Plug, Search, X } from "lucide-react";
 import { CATEGORIES, CATEGORY_LABELS, CONNECTORS, KIND_LABELS, missingFields, publicValues, searchConnectors, validate, type Category, type Connector } from "@/lib/connectors";
 import { loadConnectors, removeConnector, saveConnector, type Saved } from "@/lib/connectors/store";
@@ -35,6 +35,23 @@ export function ConnectorsDialog({
   const [chosen, setChosen] = useState<Connector | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [google, setGoogle] = useState<{ configured: boolean; connected: { service: string; email: string | null }[]; error?: string } | null>(null);
+
+  // Which Google services are signed in for this project; looked up when a connector that needs one is opened.
+  useEffect(() => {
+    if (!open || !chosen?.oauth) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the status is loaded when the connector is opened
+    setGoogle(null);
+    fetch(`/api/oauth/status?project=${encodeURIComponent(projectId)}`)
+      .then((r) => r.json())
+      .then((data) => !cancelled && setGoogle(data))
+      .catch(() => !cancelled && setGoogle({ configured: false, connected: [], error: "Fikk ikke kontakt med serveren." }));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, chosen, projectId]);
+  const signedIn = chosen?.oauth ? google?.connected.find((c) => c.service === chosen.oauth!.service) : undefined;
 
   const current = useMemo(() => saved ?? (open ? loadConnectors(projectId) : {}), [saved, open, projectId]);
   const isConnected = (connector: Connector) => Object.values(current[connector.id] ?? {}).some(Boolean) || (connector.files ? Object.keys(connector.files({})).every((path) => path in files) : false);
@@ -57,6 +74,7 @@ export function ConnectorsDialog({
 
   function add() {
     if (!chosen) return;
+    if (chosen.oauth && !signedIn) return setError("Koble til Google-kontoen først.");
     const missing = missingFields(chosen, values);
     if (missing.length > 0) return setError(`Fyll inn: ${missing.join(", ")}.`);
     const problem = validate(chosen, values);
@@ -111,6 +129,35 @@ export function ConnectorsDialog({
               <p className="rounded-xl border border-line bg-surface-2 p-3 text-[13px] text-muted">{chosen.after}</p>
             ) : (
               <>
+                {chosen.oauth && (
+                  <div className="rounded-xl border border-line bg-surface-2 p-3">
+                    <p className="text-[13px] font-medium">Google-konto</p>
+                    {!google ? (
+                      <p className="mt-1 text-[12.5px] text-muted">Sjekker …</p>
+                    ) : !google.configured ? (
+                      <p className="mt-1 text-[12.5px] text-muted">Google-innlogging er ikke satt opp i Pivolar ennå. Se «Koble til Google» i README (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET og OAUTH_ENCRYPTION_KEY).</p>
+                    ) : google.error ? (
+                      <p className="mt-1 text-[12.5px] text-red-400">{google.error}</p>
+                    ) : signedIn ? (
+                      <div className="mt-1 flex items-center justify-between gap-3 text-[12.5px]">
+                        <span className="text-emerald-400">Koblet til {signedIn.email ?? "kontoen din"}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void fetch(`/api/oauth/status?project=${encodeURIComponent(projectId)}&service=${chosen.oauth!.service}`, { method: "DELETE" }).then(() => setGoogle({ ...google, connected: google.connected.filter((c) => c.service !== chosen.oauth!.service) }));
+                          }}
+                          className="text-muted transition hover:text-fg"
+                        >
+                          Koble fra
+                        </button>
+                      </div>
+                    ) : (
+                      <a href={`/api/oauth/google/start?project=${encodeURIComponent(projectId)}&service=${chosen.oauth.service}`} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[12.5px] transition hover:border-line-strong">
+                        Koble til Google
+                      </a>
+                    )}
+                  </div>
+                )}
                 {chosen.fields.map((field) => (
                   <label key={field.key} className="block text-[12.5px] text-muted">
                     {field.label}

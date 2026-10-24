@@ -20,7 +20,7 @@ for (const c of CONNECTORS) {
   assert.ok(CATEGORIES.includes(c.category), `${c.id} has a known category`);
   if (c.kind === "soon") assert.equal(c.fields.length, 0, `${c.id} is only listed`);
   else {
-    assert.ok(c.fields.length > 0 && c.docs.startsWith("https://"), `${c.id} has fields and docs`);
+    assert.ok((c.fields.length > 0 || c.oauth) && c.docs.startsWith("https://"), `${c.id} has fields (or a sign-in) and docs`);
     assert.ok(c.request(Object.fromEntries(c.fields.map((f) => [f.key, "x"]))).length > 40, `${c.id} has a request`);
   }
   for (const f of c.fields) {
@@ -71,7 +71,7 @@ assert.deepEqual(searchConnectors("finnes ikke xyz"), []);
   assert.match(connectorById("gemini")!.request({}), /én forespørsel per besøkende per minutt/);
   assert.match(connectorById("semrush")!.request({}), /koster API-enheter/);
   assert.match(connectorById("apollo")!.request({}), /koster kreditter/);
-  assert.equal(connectorById("shopify")!.kind === "client" && CONNECTORS.filter((c) => c.kind === "soon").length, 20, "the rest still needs a sign-in flow");
+  assert.equal(connectorById("shopify")!.kind === "client" && CONNECTORS.filter((c) => c.kind === "soon").length, 18, "the rest still needs a sign-in flow");
 }
 
 // --- client connectors: public values go straight into the request

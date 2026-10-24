@@ -1,4 +1,8 @@
 import { pickEnv } from "@/lib/connectors";
+import { isHostId, type HostId } from "@/lib/hosting/catalog";
+import { isUuid } from "@/lib/oauth/core";
+import { googleEnvFor } from "@/lib/oauth/server";
+import { createClient } from "@/lib/supabase/server";
 import { PROTECTED_PATHS, type FileMap } from "@/lib/files";
 import { readBrand } from "@/lib/publish/brand";
 import { publishToGitHub, type PublishFile } from "@/lib/publish/github";
@@ -25,6 +29,10 @@ type Body = {
   targets?: { github?: boolean; vercel?: boolean };
   /** Connector keys for the site's server functions. Only the names in ENV_NAMES are used; they go to Vercel, never to GitHub. */
   env?: Record<string, string>;
+  /** Where the site goes (see HOSTS). Vercel when left out. */
+  host?: string;
+  /** The Pivolar project id, used to look up the Google sign-ins of the project. */
+  projectId?: string;
   /** The Pivolar project id. When set, the site counts page views (without cookies) and reports them to Pivolar. */
   analyticsProject?: string;
   /** Builds the project and reports what it would do, without touching GitHub or Vercel. */
@@ -46,8 +54,13 @@ export async function POST(request: Request) {
   const files = Object.fromEntries(Object.entries(body.files ?? {}).filter(([path]) => !PROTECTED_PATHS.has(path)));
   const title = (body.name ?? "").trim() || "Pivolar-app";
   const slug = slugify(title);
-  const wantGitHub = body.targets?.github !== false;
-  const wantVercel = body.targets?.vercel !== false;
+  // The chosen host decides where the site goes: Vercel is deployed from here, the others get the code on GitHub plus their own settings file.
+  const host: HostId = isHostId(body.host) ? body.host : "vercel";
+  const wantGitHub = host !== "vercel" || body.targets?.github !== false;
+  const wantVercel = host === "vercel" && body.targets?.vercel !== false;
+  // Google tokens are read here, with the owner's session, and go to Vercel only when the project has a function that uses them.
+  const usesGoogle = Object.keys(files).some((path) => path === "/api/contact.ts" || path === "/api/sheet.ts");
+  const google = usesGoogle && isUuid(body.projectId) ? await googleEnvFor(await createClient(), body.projectId) : {};
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -57,9 +70,12 @@ export async function POST(request: Request) {
 
       try {
         if (Object.keys(files).length === 0) throw new Error("Prosjektet har ingen filer å publisere.");
+        if (host !== "vercel" && Object.keys(files).some((path) => path.startsWith("/api/"))) {
+          throw new Error("Serverfunksjonene under /api virker bare på Vercel. Velg Vercel, eller fjern koblingene som bruker dem.");
+        }
         // Pictures generated in Pivolar are copied into the project, so the site does not depend on Pivolar's storage.
         const bundled = await bundleStorageImages(files, process.env.NEXT_PUBLIC_SUPABASE_URL);
-        const project: Record<string, PublishFile> = { ...buildDeployableProject(bundled.files, title, { icons: true, ...(body.analyticsProject ? { analytics: { origin: new URL(request.url).origin, projectId: body.analyticsProject } } : {}) }), ...bundled.images };
+        const project: Record<string, PublishFile> = { ...buildDeployableProject(bundled.files, title, { icons: true, host, ...(body.analyticsProject ? { analytics: { origin: new URL(request.url).origin, projectId: body.analyticsProject } } : {}) }), ...bundled.images };
         // The share image is drawn from /brand.json and the logo. Without them it uses the title and default colours.
         const og = await renderOgImage(readBrand(files, title));
         project["public/og.png"] = { base64: Buffer.from(og).toString("base64") };
@@ -122,7 +138,7 @@ export async function POST(request: Request) {
                 teamId: process.env.VERCEL_TEAM_ID || undefined,
                 name: slug,
                 files: project,
-                env: pickEnv(body.env),
+                env: { ...pickEnv(body.env), ...google },
                 onStatus: (state) => send({ step: "vercel", status: "running", state }),
               });
               send({ step: "vercel", status: "done", url: result.url, ...(result.inspectorUrl ? { inspectorUrl: result.inspectorUrl } : {}) });

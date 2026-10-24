@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Check, CircleDashed, Copy, ExternalLink, GitBranch, Globe, Loader2, Lock, Rocket, X } from "lucide-react";
+import { HostingPicker } from "@/components/HostingPicker";
 import { envFor } from "@/lib/connectors";
+import { hostById, type HostId } from "@/lib/hosting/catalog";
+import { deployLink } from "@/lib/hosting/files";
+import { profileOf, recommended } from "@/lib/hosting/recommend";
 import { loadConnectors } from "@/lib/connectors/store";
 import type { FileMap } from "@/lib/files";
 import { loadPublish, savePublish, type PublishInfo } from "@/lib/projects";
@@ -58,7 +62,7 @@ function StepRow({ icon: Icon, title, state }: { icon: typeof GitBranch; title: 
   );
 }
 
-function Setup({ config }: { config: Config }) {
+function Setup({ config, needsVercel }: { config: Config; needsVercel: boolean }) {
   const [copied, setCopied] = useState("");
   const copy = (text: string) => {
     void navigator.clipboard?.writeText(text);
@@ -74,7 +78,7 @@ function Setup({ config }: { config: Config }) {
       hint: "Åpne lenken, trykk «Generate token» (tillatelsen «repo» er forhåndsvalgt) og kopier nøkkelen.",
     });
   }
-  if (!config.vercel) {
+  if (needsVercel && !config.vercel) {
     missing.push({
       name: "VERCEL_TOKEN",
       why: "lar Pivolar legge siden ut på Vercel",
@@ -123,6 +127,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(true);
   const [analytics, setAnalytics] = useState(true);
+  const [host, setHost] = useState<HostId>("vercel");
   const [steps, setSteps] = useState<Steps>(IDLE);
   const [running, setRunning] = useState(false);
   const [last, setLast] = useState<PublishInfo | null>(null);
@@ -133,14 +138,19 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
     setLast(info);
     setName(info?.name ?? slugify(projectName));
     setSteps(IDLE);
+    setHost(recommended(profileOf(files)));
     fetch("/api/publish")
       .then((response) => response.json() as Promise<Config>)
       .then(setConfig)
       .catch(() => setConfig({ github: false, vercel: false }));
+    // The host is chosen once when the dialog opens; later edits to the files do not move the choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId, projectName]);
 
-  const ready = Boolean(config?.github && config?.vercel);
+  const ready = Boolean(config?.github && (host !== "vercel" || config?.vercel));
   const slug = slugify(name);
+  const hostInfo = hostById(host);
+  const link = host !== "vercel" && steps.github.status === "done" && steps.github.url ? deployLink(host, steps.github.url) : null;
 
   async function publish() {
     setRunning(true);
@@ -152,7 +162,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
       const response = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: slug, files, isPrivate, env: envFor(loadConnectors(projectId)), ...(analytics ? { analyticsProject: projectId } : {}) }),
+        body: JSON.stringify({ name: slug, files, isPrivate, host, env: envFor(loadConnectors(projectId)), projectId, ...(analytics ? { analyticsProject: projectId } : {}) }),
       });
       if (!response.ok || !response.body) throw new Error("Publisering startet ikke.");
       const reader = response.body.getReader();
@@ -220,7 +230,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                   <Rocket className="size-[18px] text-accent" />
                   Publiser
                 </h2>
-                <p className="mt-1 text-[13px] text-muted">Legger koden på GitHub og siden live på Vercel, med ett klikk.</p>
+                <p className="mt-1 text-[13px] text-muted">Legger koden på GitHub, og siden live der du velger.</p>
               </div>
               <button type="button" onClick={onClose} disabled={running} className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40" aria-label="Lukk">
                 <X className="size-4" />
@@ -228,7 +238,9 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
             </div>
 
             <div className="mt-5 space-y-4">
-              {config && !ready && <Setup config={config} />}
+              {config && !ready && <Setup config={config} needsVercel={host === "vercel"} />}
+
+              <HostingPicker files={files} value={host} onChange={setHost} disabled={running} />
 
               <div className="space-y-1.5">
                 <label htmlFor="publish-name" className="text-[12.5px] font-medium text-muted">
@@ -242,8 +254,16 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                   className="w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 font-mono text-[13.5px] outline-none transition focus:border-line-strong disabled:opacity-60"
                 />
                 <p className="text-[12px] text-faint">
-                  Blir <span className="font-mono text-muted">{slug}</span>.vercel.app
-                  {last ? " (samme sted som sist, så siden oppdateres)" : ""}
+                  {host === "vercel" ? (
+                    <>
+                      Blir <span className="font-mono text-muted">{slug}</span>.vercel.app
+                      {last ? " (samme sted som sist, så siden oppdateres)" : ""}
+                    </>
+                  ) : (
+                    <>
+                      Repoet blir <span className="font-mono text-muted">{slug}</span> på GitHub. Adressen til siden får du hos {hostInfo.name}.
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -264,7 +284,25 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                 <div className="space-y-2">
                   <StepRow icon={Rocket} title="Gjør prosjektet klart" state={steps.project} />
                   <StepRow icon={GitBranch} title="GitHub" state={steps.github} />
-                  <StepRow icon={Globe} title="Vercel" state={steps.vercel} />
+                  {host === "vercel" && <StepRow icon={Globe} title="Vercel" state={steps.vercel} />}
+                </div>
+              )}
+
+              {host !== "vercel" && steps.github.status === "done" && (
+                <div className="space-y-2 rounded-xl border border-line bg-surface-2 p-3.5">
+                  <p className="text-[13.5px] font-medium">Neste steg hos {hostInfo.name}</p>
+                  <ol className="list-decimal space-y-1 pl-5 text-[12.5px] text-muted">
+                    {hostInfo.steps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                  {link && (
+                    <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[12.5px] transition hover:border-line-strong">
+                      {host === "github-pages" ? "Åpne innstillinger for Pages" : `Åpne i ${hostInfo.name}`}
+                      <ExternalLink className="size-3" />
+                    </a>
+                  )}
+                  <p className="text-[12px] text-faint">Innstillingene for {hostInfo.name} ligger allerede i repoet.</p>
                 </div>
               )}
 

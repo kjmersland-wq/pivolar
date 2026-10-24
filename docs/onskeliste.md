@@ -6,6 +6,9 @@ Ting som er bestilt men ikke bygget. Koblingene legges inn i `src/lib/connectors
 - **Sikkerhetspakke:** dyp skanning (flere sjekker enn i dag: tilgangsregler, avhengigheter med kjente feil, hemmeligheter i historikken) og en oversikt over pakker med kjente sårbarheter.
 - **Koblingspakke (Connectors):** søkbar liste med kategorier, av/på per prosjekt og egne koblinger («Add custom»).
 
+## Valg av hosting ved publisering
+Vis hostingtjenester med pris og en anbefaling ut fra det som er bygget: ren side uten server (Cloudflare Pages, GitHub Pages og Netlify er gratis å starte på), side med serverfunksjoner under /api (virker i dag bare på Vercel, siden funksjonene er skrevet for Vercel; Netlify og Cloudflare trenger egen tilpasning), side med database eller egen server (Render, Railway). Trekk: prisene må hentes og vises med «sist sjekket»-dato, for de endres ofte. Oppkoblingen skal være ett klikk med token fra tjenesten, slik Vercel fungerer nå.
+
 ## Analyse (bygget første versjon: knappen Analyse; mangler «Kjør annonser» og SEO-skanning med oppfølging)
 Besøk siste 7 dager som kurve, fordelt på kilde (SEO og AI-søk, SoMe, henvisninger, direkte, annonser), mest besøkte sider, land og enheter, og antall som er inne akkurat nå. Krever egen telling på de publiserte sidene (en liten /api/-funksjon og lagring, uten cookies, slik at samtykkebanner ikke trengs), og lenker fra SEO-fanen (hvilke søkemotorer som sender besøk). Google Analytics-koblingen er en enklere start.
 

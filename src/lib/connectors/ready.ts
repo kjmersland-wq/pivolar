@@ -1,3 +1,4 @@
+import { CONTACT_FUNCTION, SHEET_FUNCTION } from "./google.ts";
 import type { Connector } from "./types.ts";
 
 const clean = (value: string | undefined) => (value ?? "").trim();
@@ -82,5 +83,33 @@ export const READY: Connector[] = [
     request: () =>
       `Legg til et påmeldingsskjema til nyhetsbrev på siden (for eksempel over bunnteksten). Skjemaet har ett e-postfelt med label og en knapp, og sender fetch("/api/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, website }) }). Legg til et skjult felt «website» som mennesker aldri ser (visually hidden, tabindex -1, autocomplete off) og send med verdien. Vis tre tilstander: sender, takk-melding ved ok, og feilmeldingen fra svaret ved feil. Funksjonen /api/subscribe finnes allerede, ikke lag den på nytt og ikke legg inn nøkler. I forhåndsvisningen finnes ikke funksjonen: vis da en vennlig feilmelding, den virker først etter publisering. ${KEEP_LOOK}`,
     after: "Påmeldingen virker først etter at siden er publisert. Nøkkelen sendes med ved publisering, så du må publisere på nytt etter at du har lagt den inn.",
+  },
+  {
+    id: "gmail",
+    name: "Gmail (kontaktskjema)",
+    category: "google",
+    kind: "ready",
+    summary: "Et kontaktskjema som sender meldingene til din Gmail-konto. Pivolar bruker bare tillatelsen til å sende, ikke til å lese e-posten din.",
+    docs: "https://developers.google.com/gmail/api/guides/sending",
+    oauth: { service: "gmail" },
+    fields: [],
+    files: () => ({ "/api/contact.ts": CONTACT_FUNCTION }),
+    request: () =>
+      `Legg til et kontaktskjema på siden (for eksempel i en kontaktseksjon) med feltene navn, e-post og melding (label på hvert, maks 3000 tegn i meldingen), og sender fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, message, website }) }). Legg til et skjult felt «website» som mennesker aldri ser (visually hidden, tabindex -1, autocomplete off) og send med verdien. Vis sender, takk-melding ved ok og feilmeldingen fra svaret ved feil. Funksjonen /api/contact finnes allerede, ikke lag den på nytt og ikke legg inn nøkler. I forhåndsvisningen finnes ikke funksjonen: vis da en vennlig feilmelding, den virker først etter publisering. ${KEEP_LOOK}`,
+    after: "Koble til Google-kontoen først. Publiser på nytt etterpå, så får siden tilgangen. Meldingene kommer til kontoen du koblet til.",
+  },
+  {
+    id: "google-sheets",
+    name: "Google Sheets (skjema til regneark)",
+    category: "google",
+    kind: "ready",
+    summary: "Et skjema som legger hver innsending som en ny rad i et regneark. Kolonnene er dato, navn, e-post og melding.",
+    docs: "https://developers.google.com/sheets/api/guides/values#append_values",
+    oauth: { service: "sheets" },
+    fields: [{ key: "sheetId", label: "Regnearkets ID", placeholder: "1AbC…", env: "GOOGLE_SHEET_ID", help: "Den lange koden i adressen til regnearket, mellom /d/ og /edit. Regnearket må eies av eller deles med kontoen du kobler til.", pattern: /^[\w-]{20,}$/, error: "Regnearkets ID er den lange koden mellom /d/ og /edit i adressen." }],
+    files: () => ({ "/api/sheet.ts": SHEET_FUNCTION }),
+    request: () =>
+      `Legg til et skjema på siden (for eksempel kontakt eller påmelding) med feltene navn, e-post og melding (label på hvert, maks 3000 tegn i meldingen), og sender fetch("/api/sheet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, message, website }) }). Legg til et skjult felt «website» som mennesker aldri ser (visually hidden, tabindex -1, autocomplete off) og send med verdien. Vis sender, takk-melding ved ok og feilmeldingen fra svaret ved feil. Funksjonen /api/sheet finnes allerede, ikke lag den på nytt og ikke legg inn nøkler. I forhåndsvisningen finnes ikke funksjonen: vis da en vennlig feilmelding, den virker først etter publisering. ${KEEP_LOOK}`,
+    after: "Koble til Google-kontoen først, og sett første rad i regnearket som overskrifter (Dato, Navn, E-post, Melding). Publiser på nytt etterpå.",
   },
 ];

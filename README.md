@@ -80,3 +80,18 @@ Publiserer du igjen, oppdateres samme repo og samme Vercel-prosjekt.
 - **Importer ZIP** på forsiden: arkivet leses i minnet (aldri pakket ut til disk eller kjørt), og du får en rapport før prosjektet opprettes. Avvises: stier med `..`, absolutte stier, for mange eller for store filer, pakkebomber. `.env` og nøkkelfiler tas ikke med.
 - **Eksporter** i arbeidsflaten: ZIP med alle filer, `.env.example`, `EXPORT-REPORT.md` og `PIVOLAR-MANIFEST.json`. Nøkler fjernes. Binærfiler (bilder) lagres ikke i Pivolar ennå og må kopieres tilbake for hånd.
 - Plan, revisjon og faser: `docs/PIVOLAR-PLAN.md`.
+
+## Koble til Google
+
+Gmail-kontaktskjema og Google Sheets bruker din egen Google-konto. Du lager en «app» hos Google én gang, og Pivolar logger inn med den.
+
+1. Gå til [Google Cloud Console](https://console.cloud.google.com/), lag et prosjekt og slå på **Gmail API** og **Google Sheets API** (APIs & Services → Library).
+2. **OAuth consent screen**: velg *External*, fyll inn navn og e-post, og legg til deg selv under *Test users*.
+3. **Credentials → Create credentials → OAuth client ID → Web application.** Under *Authorized redirect URIs* legger du inn `https://DIN-PIVOLAR-ADRESSE/api/oauth/google/callback`.
+4. Legg `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` og `OAUTH_ENCRYPTION_KEY` (se `.env.example`) inn i Vercel og deploy på nytt.
+5. Kjør migrasjonen `supabase/migrations/20261024140000_pivolar_oauth.sql` i Supabase (SQL Editor).
+6. I et prosjekt: **Koblinger → Gmail** (eller Sheets) → **Koble til Google**, og velg Tillat.
+
+Viktig om tokenene: står appen din i *Testing*-modus hos Google, slutter tilgangen å virke etter 7 dager. Trykk *Publish app* på consent screen for å unngå det. Appen vises da som «ikke verifisert» for andre, men det er bare deg som bruker den, og du kan fortsette.
+
+Pivolar ber bare om det den trenger: `gmail.send` (sende, ikke lese e-posten din) og `spreadsheets`. Tokenet lagres kryptert, vises aldri i nettleseren, og sendes bare til Vercel ved publisering av et prosjekt som bruker det.

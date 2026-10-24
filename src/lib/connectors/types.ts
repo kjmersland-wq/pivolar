@@ -35,6 +35,8 @@ export type Connector = {
   /** Where the owner gets the values. */
   docs: string;
   fields: Field[];
+  /** Needs a Google sign-in first: the owner connects the account once, and the site gets a token for this service only. */
+  oauth?: { service: "gmail" | "sheets" | "drive" | "calendar" };
   /** Files written straight into the project (server functions). */
   files?: (values: Record<string, string>) => FileMap;
   /** What the model builds. Gets only public values. */
