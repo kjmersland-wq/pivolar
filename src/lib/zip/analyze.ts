@@ -108,6 +108,8 @@ export function analyze(files: FileMap): Report {
       ? "Kan vises i forhåndsvisningen."
       : runnable
         ? "Kan vises ved å kjøre prosjektet i et isolert, midlertidig miljø på Vercel (første oppstart tar ett til to minutter). Endringer med AI virker på filene, og kan sendes til GitHub som en pull request."
+        : framework.id === "static"
+        ? "Vises som en statisk side. Filer som ikke importeres (bilder, store datafiler) hentes direkte fra GitHub. Endringer med AI virker på filene, og kan sendes til GitHub som en pull request."
         : viteReact
         ? "Vises i en forenklet forhåndsvisning: uten backend og miljøvariabler, og med temaet gjenskapt fra CSS-variablene. Endringer med AI virker på filene, og kan sendes til GitHub som en pull request."
         : "Kan leses, redigeres for hånd og eksporteres, men ikke vises i forhåndsvisningen ennå. Det krever kjøring av prosjektet i et isolert miljø (kommer i fase 4).",

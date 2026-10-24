@@ -15,6 +15,7 @@ import { ElementPanel, type Picked } from "@/components/ElementPanel";
 import type { Spec } from "@/lib/analyze/condense";
 import { explainError } from "@/lib/explain/errors";
 import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, TAILWIND_CDN, type FileMap } from "@/lib/files";
+import { isStaticSite } from "@/components/StaticPreview";
 import { mapForSandbox } from "@/lib/sandbox-map";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -150,7 +151,7 @@ export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFi
   const mapped = useMemo(() => mapForSandbox(projectFiles), [projectFiles]);
   const files = mapped?.files ?? projectFiles;
   // Other imported projects bring a package.json and a layout the sandbox cannot run.
-  const previewable = mapped !== null || !("/package.json" in projectFiles);
+  const previewable = mapped !== null || (!("/package.json" in projectFiles) && !isStaticSite(projectFiles));
 
   const known = useRef(files);
   const snapshot = useRef(serialize(files));
