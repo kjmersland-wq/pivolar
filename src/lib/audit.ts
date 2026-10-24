@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** The actions that may be recorded. The database function accepts the same list. */
-export type AuditAction = "import_owner_confirmed";
+export type AuditAction = "import_owner_confirmed" | "domain_purchase_attempt" | "domain_purchase";
 
 /**
  * Records a sensitive action for the signed-in user (readable by them in their history). The

@@ -10,6 +10,7 @@ import { BudgetDialog } from "@/components/BudgetDialog";
 import { CheckDialog } from "@/components/CheckDialog";
 import { AnalyticsDialog } from "@/components/AnalyticsDialog";
 import { ConnectorsDialog } from "@/components/ConnectorsDialog";
+import { DomainDialog } from "@/components/DomainDialog";
 import { HostingDialog } from "@/components/HostingDialog";
 import { LoopDialog } from "@/components/LoopDialog";
 import { PullRequestDialog } from "@/components/PullRequestDialog";
@@ -80,6 +81,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [domainsOpen, setDomainsOpen] = useState(false);
   // Set when the project was imported from GitHub; changes can then be sent back as a pull request.
   const [github] = useState(() => loadImportInfo(id)?.github ?? null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -449,7 +451,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
         onOpen={(target: PanelTarget) => {
-          const open = { analytics: setAnalyticsOpen, connectors: setConnectorsOpen, check: setCheckOpen, hosting: setHostingOpen, export: setExportOpen, publish: setPublishOpen, pr: setPrOpen }[target];
+          const open = { analytics: setAnalyticsOpen, connectors: setConnectorsOpen, check: setCheckOpen, hosting: setHostingOpen, export: setExportOpen, publish: setPublishOpen, pr: setPrOpen, domains: setDomainsOpen }[target];
           open(true);
         }}
         projectId={id}
@@ -463,6 +465,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         edits={edits}
         onKnowledge={(text) => setEdits((prev) => withKnowledge(prev, text))}
       />
+      <DomainDialog open={domainsOpen} onClose={() => setDomainsOpen(false)} projectId={id} projectName={name} files={files} />
       <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} onCompose={compose} initialName={name} />
       <CompareDialog
         open={compareOpen}

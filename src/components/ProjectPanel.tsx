@@ -16,7 +16,7 @@ import { fetchUsage, NOK_PER_USD } from "@/lib/usage/client";
 import { cn } from "@/lib/utils";
 
 /** The dialogs the panel can open. The workspace owns them; the panel only asks. */
-export type PanelTarget = "analytics" | "connectors" | "check" | "hosting" | "export" | "publish" | "pr";
+export type PanelTarget = "analytics" | "connectors" | "check" | "hosting" | "export" | "publish" | "pr" | "domains";
 
 type Icon = ComponentType<{ className?: string }>;
 
@@ -26,6 +26,7 @@ const NAV: { target: PanelTarget; label: string; icon: Icon }[] = [
   { target: "check", label: "Kontroll: sikkerhet og SEO", icon: ShieldCheck },
   { target: "hosting", label: "Hosting", icon: Server },
   { target: "publish", label: "Publisering", icon: Rocket },
+  { target: "domains", label: "Domene", icon: Globe },
   { target: "export", label: "Eksport", icon: Download },
 ];
 
