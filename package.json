@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node tests/direct-edit.test.mts && node tests/compose.test.mts && node tests/zip.test.mts && node tests/images.test.mts && node tests/publish.test.mts && node tests/image-gen.test.mts && node tests/usage.test.mts && node tests/analyze.test.mts && node tests/compare.test.mts && node tests/context.test.mts && node tests/guard.test.mts && node tests/explain.test.mts && node tests/checks.test.mts && node tests/github.test.mts && node tests/github-pr.test.mts && node tests/sandbox-map.test.mts && node tests/runner.test.mts && node tests/seo.test.mts && node tests/connectors.test.mts && node tests/security-pack.test.mts && node tests/analytics.test.mts && node tests/oauth.test.mts && node tests/hosting.test.mts && node tests/quota.test.mts && node tests/stack.test.mts && node tests/import.test.mts && node tests/media.test.mts"
+    "test": "node tests/direct-edit.test.mts && node tests/compose.test.mts && node tests/zip.test.mts && node tests/images.test.mts && node tests/publish.test.mts && node tests/image-gen.test.mts && node tests/usage.test.mts && node tests/analyze.test.mts && node tests/compare.test.mts && node tests/context.test.mts && node tests/guard.test.mts && node tests/explain.test.mts && node tests/checks.test.mts && node tests/github.test.mts && node tests/github-pr.test.mts && node tests/sandbox-map.test.mts && node tests/runner.test.mts && node tests/seo.test.mts && node tests/connectors.test.mts && node tests/security-pack.test.mts && node tests/analytics.test.mts && node tests/oauth.test.mts && node tests/hosting.test.mts && node tests/quota.test.mts && node tests/stack.test.mts && node tests/import.test.mts && node tests/media.test.mts && node tests/site-project.test.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.86",
@@ -39,6 +39,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "react-router-dom": "^6.28.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "yaml": "^2.9.1"

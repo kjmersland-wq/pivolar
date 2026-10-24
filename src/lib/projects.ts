@@ -203,13 +203,15 @@ export function saveMessages(id: string, messages: UIMessage[]) {
 
 /** What is known about a project that came from outside, kept for the export manifest. */
 export type ImportInfo = {
-  source: "zip" | "github";
+  source: "zip" | "github" | "cms";
   fileName: string;
   at: number;
   skippedBinaries: string[];
   omittedSecrets: string[];
   /** Where a GitHub import came from, so changes can be sent back to the same repository. */
   github?: { owner: string; repo: string; branch: string; sha: string; private: boolean; url: string };
+  /** Where a website import came from. The job holds the model and the pictures. */
+  cms?: { url: string; job: string; pages: number; images: number };
 };
 
 export function loadImportInfo(id: string): ImportInfo | null {

@@ -157,3 +157,17 @@ Hvert bilde hentes gjennom den sikre henteren (og `robots.txt`), sjekkes på de 
 Grenser: 400 bilder, 10 MB per bilde, 150 MB nedlasting per import, 50 millioner piksler per bilde, og 500 MB lagret per bruker. Filene ligger i bøtta `pivolar-assets` under brukerens egen mappe. Bilder som ikke kan lagres beholder den gamle adressen og står i advarslene.
 
 Oppsett: kjør `supabase/migrations/20261024180000_pivolar_import_assets.sql` i Supabase.
+
+### Fra import til prosjekt
+
+Knappen **Importer fra WordPress** på startsiden tar deg gjennom hele løpet: sjekk nettstedet, hent innholdet og bildene, og **Åpne som prosjekt**. Prosjektet lages uten AI av faste maler (`src/lib/import/site-project.ts`):
+
+- Hver side og hvert innlegg ligger som data (`/content/pages/*.ts`) og vises av ferdige blokk-komponenter (`/components/Blocks.tsx`). Designet endres på ett sted, og AI-en jobber med komponentene, aldri med tekstene.
+- Hver side ligger på adressen den hadde, så gamle lenker, bokmerker og søketreff virker. Lenker mellom sidene er gjort om til lenker på det nye nettstedet. Har det gamle nettstedet ingen egen forside, lages en som lister siste innlegg.
+- Menyen følger det gamle nettstedet. Tittel og beskrivelse per side kommer fra det gamle SEO-feltet.
+- Koden skriver aldri tekst som HTML: den lille markeringen som er igjen (lenker og utheving) leses av en egen tolker, og alt annet vises som tekst. Innbygging av annet enn video og kart vises som lenke.
+- Bildene peker på lagringen (`pivolar-assets`). Ved publisering lastes de ned til nettstedet og koden peker på kopiene (`bundleStorageImages` kjenner nå begge bøttene, tar opptil 400 bilder, seks om gangen).
+- `IMPORT.md` i prosjektet sier hva som ikke kom med (skjemaer, video, kortkoder), hvilke programtillegg som ble brukt, og advarsler.
+- Vercel og GitHub Pages får en regel som åpner siden for alle adresser som ikke er filer (Netlify, Cloudflare, Render og Caddy hadde den fra før).
+
+Begrensning: nettstedet er en enkeltsideapp, så en søkemotor ser innholdet først etter at JavaScript har kjørt. For SEO bør den ferdige utgaven forhåndsrendres (planlagt: statisk eksport).

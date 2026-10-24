@@ -57,6 +57,8 @@ const PACKAGE_JSON = (name: string) =>
 export const SECURITY_HEADERS =
   JSON.stringify(
     {
+      // Every address that is not a file opens the page, which shows the right content for the address. Files and functions come first.
+      rewrites: [{ source: "/(.*)", destination: "/index.html" }],
       headers: [
         {
           source: "/(.*)",

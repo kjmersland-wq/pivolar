@@ -63,6 +63,8 @@ jobs:
           cache: npm
       - run: npm install
       - run: npm run build
+      # GitHub Pages has no fallback of its own: an unknown address gets 404.html, which here is the page itself.
+      - run: cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

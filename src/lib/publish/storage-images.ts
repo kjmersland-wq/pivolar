@@ -3,9 +3,13 @@ import { createHash } from "node:crypto";
 type Fetcher = (url: string) => Promise<Response>;
 type Files = Record<string, string>;
 
-const BUCKET = "pivolar-images";
-const MAX_IMAGES = 20;
-const MAX_BYTES = 8 * 1024 * 1024;
+/** Pictures made in Pivolar, and pictures brought in by an import. Both are public for reading. */
+const BUCKETS = ["pivolar-images", "pivolar-assets"];
+const MAX_IMAGES = 400;
+const MAX_BYTES = 10 * 1024 * 1024;
+/** Everything one publish may download into the site, so a huge import cannot fill the repository. */
+const MAX_TOTAL_BYTES = 120 * 1024 * 1024;
+const CONCURRENCY = 6;
 
 export type BundleResult = {
   /** The project files with image addresses rewritten to /images/... */
@@ -28,26 +32,34 @@ export async function bundleStorageImages(files: Files, supabaseUrl: string | un
   const result: BundleResult = { files: { ...files }, images: {}, failed: [] };
   if (!supabaseUrl) return result;
   const origin = supabaseUrl.replace(/\/+$/, "");
-  const pattern = new RegExp(`${escapeRegex(origin)}/storage/v1/object/public/${BUCKET}/([A-Za-z0-9._/-]+\\.(?:png|jpe?g|webp))`, "g");
+  const pattern = new RegExp(`${escapeRegex(origin)}/storage/v1/object/public/(?:${BUCKETS.join("|")})/([A-Za-z0-9._/-]+\\.(?:png|jpe?g|webp|gif|avif))`, "g");
 
   const found = new Set<string>();
   for (const code of Object.values(files)) for (const match of code.matchAll(pattern)) found.add(match[0]);
 
   const replacements = new Map<string, string>();
-  for (const url of [...found].slice(0, MAX_IMAGES)) {
-    const extension = url.slice(url.lastIndexOf(".") + 1).toLowerCase().replace("jpeg", "jpg");
-    const name = `${createHash("sha1").update(url).digest("hex").slice(0, 10)}.${extension}`;
-    try {
-      const response = await fetcher(url);
-      if (!response.ok) throw new Error(String(response.status));
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength === 0 || bytes.byteLength > MAX_BYTES) throw new Error("size");
-      result.images[`public/images/${name}`] = { base64: Buffer.from(bytes).toString("base64") };
-      replacements.set(url, `/images/${name}`);
-    } catch {
-      result.failed.push(url);
+  const queue = [...found].slice(0, MAX_IMAGES);
+  let total = 0;
+  // A few at a time: an import can bring hundreds of pictures, and one after another would run out of time.
+  async function worker() {
+    for (let url = queue.shift(); url !== undefined; url = queue.shift()) {
+      const extension = url.slice(url.lastIndexOf(".") + 1).toLowerCase().replace("jpeg", "jpg");
+      const name = `${createHash("sha1").update(url).digest("hex").slice(0, 10)}.${extension}`;
+      try {
+        if (total >= MAX_TOTAL_BYTES) throw new Error("total");
+        const response = await fetcher(url);
+        if (!response.ok) throw new Error(String(response.status));
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.byteLength === 0 || bytes.byteLength > MAX_BYTES) throw new Error("size");
+        total += bytes.byteLength;
+        result.images[`public/images/${name}`] = { base64: Buffer.from(bytes).toString("base64") };
+        replacements.set(url, `/images/${name}`);
+      } catch {
+        result.failed.push(url);
+      }
     }
   }
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   for (const url of [...found].slice(MAX_IMAGES)) result.failed.push(url);
 
   if (replacements.size) {
