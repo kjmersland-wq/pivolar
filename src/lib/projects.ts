@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { UIMessage } from "ai";
 import type { UserEdit } from "@/lib/files";
+import { dropThumb } from "@/lib/thumbs";
 
 /**
  * Projects are worked on in this browser (fast, works offline) and mirrored to the account in the
@@ -148,6 +149,7 @@ export function removeLocal(id: string) {
     window.localStorage.removeItem(editsKey(id));
     window.localStorage.removeItem(publishKey(id));
     window.localStorage.removeItem(importKey(id));
+    void dropThumb(id);
   } catch {
     /* ignore */
   }

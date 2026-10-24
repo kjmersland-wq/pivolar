@@ -136,9 +136,11 @@ type SandboxProps = {
   runner?: React.ReactNode;
   /** Filled in with a function that measures the layout inside the preview. */
   measureRef?: MutableRefObject<(() => Promise<Spec>) | null>;
+  /** Gets a small picture of the opening screen now and then, for the project list. */
+  onShot?: (dataUrl: string) => void;
 };
 
-export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFix, onEdit, onElement, onInspectDone, measureRef, runner }: SandboxProps) {
+export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFix, onEdit, onElement, onInspectDone, measureRef, runner, onShot }: SandboxProps) {
   const theme = useTheme();
   const frame = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
@@ -227,6 +229,29 @@ export function Sandbox({ files: projectFiles, view, device, busy, inspect, onFi
       measureRef.current = null;
     };
   }, [measureRef, version]);
+
+  // A small picture of the opening screen for the project list: asked for a few seconds after the
+  // preview has settled, at desktop width only, and not more often than once a minute.
+  const shotAt = useRef(0);
+  useEffect(() => {
+    if (!onShot || busy || view !== "preview" || device !== "desktop" || !previewable) return;
+    const timer = window.setTimeout(() => {
+      const target = frame.current?.querySelector("iframe")?.contentWindow;
+      if (!target || Date.now() - shotAt.current < 60_000) return;
+      shotAt.current = Date.now();
+      const id = Math.random().toString(36).slice(2);
+      const give = window.setTimeout(() => window.removeEventListener("message", onMessage), 15_000);
+      function onMessage(event: MessageEvent) {
+        if (event.source !== target || !event.data || event.data.type !== "atelier:captured" || event.data.id !== id) return;
+        window.clearTimeout(give);
+        window.removeEventListener("message", onMessage);
+        if (typeof event.data.dataUrl === "string") onShot?.(event.data.dataUrl);
+      }
+      window.addEventListener("message", onMessage);
+      target.postMessage({ type: "atelier:capture", id }, "*");
+    }, 6000);
+    return () => window.clearTimeout(timer);
+  }, [onShot, busy, view, device, previewable, version]);
 
   // Talk to the inspector script inside the preview iframe.
   const inspectRef = useRef(inspect);

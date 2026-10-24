@@ -26,6 +26,7 @@ import { QueuedBar } from "@/components/QueuedBar";
 import { Sandbox, type Device, type PickedElement, type View } from "@/components/Preview";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UsageMeter } from "@/components/UsageMeter";
+import { saveThumb } from "@/lib/thumbs";
 import { deriveFiles, type UserEdit } from "@/lib/files";
 import { getProject, loadEdits, loadImportInfo, loadMessages, saveEdits, saveMessages, takePendingPrompt, updateProject } from "@/lib/projects";
 import { addQueued, loadQueued, removeQueued } from "@/lib/queued";
@@ -524,7 +525,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           <ChatPanel messages={messages} status={status} error={error} mode={mode} onModeChange={setMode} onSend={send} onStop={stop} onRevert={revert} />
         </aside>
         <main className="min-h-0">
-          <Sandbox files={files} view={view} device={device} busy={busy} inspect={inspect} onFix={fix} onEdit={editFile} onElement={changeElement} onInspectDone={() => setInspect(false)} measureRef={measureRef} runner={isStaticSite(files) ? <StaticPreview files={files} github={github} /> : <RunnerPreview projectId={id} files={files} github={github} />} />
+          <Sandbox files={files} view={view} device={device} busy={busy} inspect={inspect} onFix={fix} onEdit={editFile} onElement={changeElement} onInspectDone={() => setInspect(false)} measureRef={measureRef} onShot={(url) => void saveThumb(id, url)} runner={isStaticSite(files) ? <StaticPreview files={files} github={github} /> : <RunnerPreview projectId={id} files={files} github={github} />} />
         </main>
       </div>
     </div>

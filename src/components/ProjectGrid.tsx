@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CloudUpload, Loader2, Trash2 } from "lucide-react";
 import { deleteProject, isAccountId, useProjects } from "@/lib/projects";
 import { migrateLegacy, type MigrateResult } from "@/lib/sync";
+import { useThumb } from "@/lib/thumbs";
 
 /** Older projects only exist in this browser. Moving them to the account is always the user's own step. */
 function MoveToAccount({ count }: { count: number }) {
@@ -57,6 +58,13 @@ const TINTS = [
   "from-emerald-500/25 to-sky-500/25",
 ];
 
+/** The top of the project's opening screen, or a colour until the preview has drawn one. */
+function Thumb({ id, tint }: { id: string; tint: string }) {
+  const url = useThumb(id);
+  // eslint-disable-next-line @next/next/no-img-element -- a small local picture as a data address, not something to optimise
+  return url ? <img src={url} alt="" className="aspect-[16/10] w-full object-cover object-top" /> : <div className={`aspect-[16/10] w-full bg-gradient-to-br ${tint}`} />;
+}
+
 export function ProjectGrid() {
   const projects = useProjects();
   if (projects.length === 0) return null;
@@ -69,7 +77,7 @@ export function ProjectGrid() {
         {projects.map((project, index) => (
           <div key={project.id} className="group card relative overflow-hidden rounded-2xl transition hover:-translate-y-0.5 hover:border-line-strong">
             <Link href={`/p/${project.id}`} className="block">
-              <div className={`h-28 bg-gradient-to-br ${TINTS[index % TINTS.length]}`} />
+              <Thumb id={project.id} tint={TINTS[index % TINTS.length]!} />
               <div className="p-4">
                 <p className="truncate text-[14.5px] font-medium">{project.name}</p>
                 <p className="mt-0.5 flex items-center gap-2 text-[12.5px] text-faint">

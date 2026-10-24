@@ -248,3 +248,17 @@ Knappen «Mer» i verktøylinjen åpner prosjektets egen side, som «More» i Lo
 - **Hemmeligheter:** hvilke koblinger som har lagrede verdier og hvor mange. Verdiene vises aldri, og hver kobling kan fjernes.
 - **Git:** hvor en importert kode kommer fra og pull request, eller eksport til GitHub.
 - **Handlinger og faresone:** dupliser prosjektet (samtale, filer og opphav, men ikke publiseringen, så kopien ikke kan overskrive den opprinnelige siden) og slett prosjektet, som spør to ganger.
+
+## Prompt-hjelperen
+
+Knappen «Prompt-hjelper» under tekstfeltet på forsiden åpner en veiviser: du velger hva du skal lage (landingsside, nettbutikk, portefølje, kafé, firma, forening, blogg, timebestilling eller app), skriver navn, hva dere gjør og hvem det er for, og velger mål, stemning, aksentfarge, seksjoner, funksjoner, språk og bilder. Vanlig kode setter det sammen til en komplett bestilling (`src/lib/prompt/builder.ts`):
+
+- Hver bestilling har de samme delene: hva som skal bygges, målgruppe og hva en besøkende skal gjøre, seksjoner i rekkefølge, funksjoner (som kobles til under Koblinger uten nøkler i koden), design etter stemningen, bilder, språk, og krav til mobil, kontrast, overskrifter, brand.json og SEO.
+- Fakta som mangler (priser, adresse, telefon, navn) skal bli plassholdere i hakeparentes, ikke oppfunnet.
+- Teksten til høyre kan redigeres fritt. Den følger valgene til du endrer den selv, og kan bygges på nytt fra valgene. En liste viser det som mangler, uten å stoppe noe.
+- **Skjerp med AI (valgfritt)** (`/api/prompt/improve`) skriver om hele bestillingen til noe mer presist, uten å fjerne valg eller finne på fakta. Samme porter som chatten (innlogget, AI av/på, døgntak, budsjett), egen kvote på 20 i timen, høyst 1 600 tokens ut og 45 sekunder. Svaret renses til ren tekst og vises i tekstfeltet, så du ser det før noe sendes. Ingen verktøy: AI-en kan bare svare med tekst.
+- Valgene «Legg i tekstfeltet» og «Bygg nå» sender den ferdige teksten videre.
+
+## Bilde av åpningssiden på hvert prosjekt
+
+Prosjektlisten viser nå et utsnitt av åpningssiden til hvert prosjekt. Forhåndsvisningen tegner selv et lite JPEG av toppen av siden (biblioteket html-to-image lastes inn i forhåndsvisningen første gang), ca. 6 sekunder etter at siden har satt seg, bare i skrivebordsvisning og høyst én gang i minuttet. Bildet sendes opp som tekst, kontrolleres (bare en liten JPEG slipper gjennom, både før lagring og ved lesing, siden teksten kommer fra kode AI-en har skrevet) og lagres i nettleseren (IndexedDB). Uten bilde vises en farge. Bildene følger ikke med til andre enheter, og slettes når prosjektet slettes. Prosjekter som kjøres på serveren (importert Next.js med mer) og rene HTML-sider får ikke bilde ennå.

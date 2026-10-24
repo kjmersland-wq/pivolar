@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowUp, Sparkles } from "lucide-react";
+import { ArrowUp, Sparkles, Wand2 } from "lucide-react";
+import { PromptWizard } from "@/components/PromptWizard";
 import { createProject, setPendingPrompt } from "@/lib/projects";
 
 const IDEAS = [
@@ -18,6 +19,7 @@ export function PromptBox() {
   const router = useRouter();
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
+  const [wizard, setWizard] = useState(false);
 
   function start(prompt: string) {
     const value = prompt.trim();
@@ -51,9 +53,15 @@ export function PromptBox() {
           className="block w-full resize-none bg-transparent px-3 py-2.5 text-[16px] leading-relaxed outline-none placeholder:text-faint"
         />
         <div className="flex items-center justify-between px-1 pt-1">
-          <span className="flex items-center gap-1.5 px-2 text-[12px] text-faint">
-            <Sparkles className="size-3.5" />
-            React · Tailwind · live forhåndsvisning
+          <span className="flex items-center gap-3 px-2 text-[12px] text-faint">
+            <button type="button" onClick={() => setWizard(true)} title="Velg i stedet for å skrive: Pivolar setter sammen en komplett bestilling" className="flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[12px] text-muted transition hover:border-line-strong hover:text-fg">
+              <Wand2 className="size-3.5" />
+              Prompt-hjelper
+            </button>
+            <span className="hidden items-center gap-1.5 sm:flex">
+              <Sparkles className="size-3.5" />
+              React · Tailwind · live forhåndsvisning
+            </span>
           </span>
           <button
             type="button"
@@ -66,6 +74,17 @@ export function PromptBox() {
           </button>
         </div>
       </motion.div>
+
+      <PromptWizard
+        open={wizard}
+        onClose={() => setWizard(false)}
+        initialAbout={text}
+        onUse={(prompt, now) => {
+          setWizard(false);
+          setText(prompt);
+          if (now) start(prompt);
+        }}
+      />
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mt-4 flex flex-wrap justify-center gap-2">
         {IDEAS.map((idea) => (

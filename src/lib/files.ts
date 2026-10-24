@@ -95,6 +95,36 @@ root.render(
     try { spec = measure(e.data.options || {}); } catch (err) { error = String((err && err.message) || err); }
     window.parent.postMessage({ type: "atelier:measured", id: e.data.id, spec: spec, error: error }, "*");
   });
+  // A small picture of the opening screen, for the project list. The drawing library is loaded the first time it is needed.
+  var shotQueue = null;
+  function withShotLib(done) {
+    if (window.htmlToImage) return done(null);
+    if (shotQueue) { shotQueue.push(done); return; }
+    shotQueue = [done];
+    var script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js";
+    var finish = function (err) { var q = shotQueue; shotQueue = null; q.forEach(function (f) { f(err); }); };
+    script.onload = function () { finish(null); };
+    script.onerror = function () { finish(new Error("lib")); };
+    document.head.appendChild(script);
+  }
+  window.addEventListener("message", function (e) {
+    if (!e.data || e.data.type !== "atelier:capture") return;
+    var id = e.data.id;
+    var reply = function (dataUrl, error) { window.parent.postMessage({ type: "atelier:captured", id: id, dataUrl: dataUrl, error: error }, "*"); };
+    withShotLib(function (err) {
+      if (err || !window.htmlToImage) return reply(null, "lib");
+      if (box) box.style.display = "none";
+      var width = Math.min(window.innerWidth || 1280, 1280);
+      var height = Math.round(width * 0.625);
+      var back = getComputedStyle(document.body).backgroundColor;
+      if (!back || back === "rgba(0, 0, 0, 0)") back = getComputedStyle(document.documentElement).backgroundColor;
+      if (!back || back === "rgba(0, 0, 0, 0)") back = "#ffffff";
+      window.htmlToImage.toJpeg(document.body, { width: width, height: height, canvasWidth: 480, canvasHeight: 300, quality: 0.72, backgroundColor: back, imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" })
+        .then(function (url) { reply(url, null); })
+        .catch(function (error) { reply(null, String((error && error.message) || error)); });
+    });
+  });
 })();
 `,
   "/styles.css": `html, body, #root { margin: 0; min-height: 100%; }
