@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Check, CircleDashed, Copy, ExternalLink, GitBranch, Globe, Loader2, Lock, Rocket, X } from "lucide-react";
+import { envFor } from "@/lib/connectors";
+import { loadConnectors } from "@/lib/connectors/store";
 import type { FileMap } from "@/lib/files";
 import { loadPublish, savePublish, type PublishInfo } from "@/lib/projects";
 import { slugify } from "@/lib/publish/project";
@@ -149,7 +151,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
       const response = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: slug, files, isPrivate }),
+        body: JSON.stringify({ name: slug, files, isPrivate, env: envFor(loadConnectors(projectId)) }),
       });
       if (!response.ok || !response.body) throw new Error("Publisering startet ikke.");
       const reader = response.body.getReader();

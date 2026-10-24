@@ -266,8 +266,8 @@ export function buildDeployableProject(files: FileMap, title: string, options: {
     if (PROTECTED_PATHS.has(path)) continue;
     const relative = path.replace(/^\/+/, "");
     if (relative === "styles.css") continue;
-    // Files under /public are served as they are (favicon, logo); everything else is source code.
-    out[relative.startsWith("public/") ? relative : `src/${relative}`] = code;
+    // Files under /public are served as they are (favicon, logo) and files under /api run as server functions on Vercel; everything else is source code.
+    out[relative.startsWith("public/") || relative.startsWith("api/") ? relative : `src/${relative}`] = code;
   }
   out["src/styles.css"] = buildStyles(files["/styles.css"] ?? "");
 

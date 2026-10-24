@@ -1,3 +1,4 @@
+import { pickEnv } from "@/lib/connectors";
 import { PROTECTED_PATHS, type FileMap } from "@/lib/files";
 import { readBrand } from "@/lib/publish/brand";
 import { publishToGitHub, type PublishFile } from "@/lib/publish/github";
@@ -22,6 +23,8 @@ type Body = {
   files?: FileMap;
   isPrivate?: boolean;
   targets?: { github?: boolean; vercel?: boolean };
+  /** Connector keys for the site's server functions. Only the names in ENV_NAMES are used; they go to Vercel, never to GitHub. */
+  env?: Record<string, string>;
   /** Builds the project and reports what it would do, without touching GitHub or Vercel. */
   dryRun?: boolean;
 };
@@ -117,6 +120,7 @@ export async function POST(request: Request) {
                 teamId: process.env.VERCEL_TEAM_ID || undefined,
                 name: slug,
                 files: project,
+                env: pickEnv(body.env),
                 onStatus: (state) => send({ step: "vercel", status: "running", state }),
               });
               send({ step: "vercel", status: "done", url: result.url, ...(result.inspectorUrl ? { inspectorUrl: result.inspectorUrl } : {}) });

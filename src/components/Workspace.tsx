@@ -5,9 +5,10 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Rocket, ScanSearch, ShieldCheck, Smartphone, Tablet } from "lucide-react";
+import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Plug, Rocket, ScanSearch, ShieldCheck, Smartphone, Tablet } from "lucide-react";
 import { BudgetDialog } from "@/components/BudgetDialog";
 import { CheckDialog } from "@/components/CheckDialog";
+import { ConnectorsDialog } from "@/components/ConnectorsDialog";
 import { LoopDialog } from "@/components/LoopDialog";
 import { PullRequestDialog } from "@/components/PullRequestDialog";
 import { RunnerPreview } from "@/components/RunnerPreview";
@@ -69,6 +70,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [publishOpen, setPublishOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
   // Set when the project was imported from GitHub; changes can then be sent back as a pull request.
   const [github] = useState(() => loadImportInfo(id)?.github ?? null);
@@ -309,6 +311,15 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           </button>
           <button
             type="button"
+            onClick={() => setConnectorsOpen(true)}
+            title="Legg til betaling og nyhetsbrev"
+            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
+          >
+            <Plug className="size-3.5" />
+            <span className="hidden md:inline">Koblinger</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setExportOpen(true)}
             title="Last ned hele prosjektet som ZIP"
             className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
@@ -406,6 +417,21 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         files={files}
         busy={busy}
         onClose={() => setCheckOpen(false)}
+        onFix={(text) => {
+          setMode("build");
+          modeRef.current = "build";
+          void guarded({ text });
+        }}
+      />
+      <ConnectorsDialog
+        open={connectorsOpen}
+        projectId={id}
+        files={files}
+        busy={busy}
+        onClose={() => setConnectorsOpen(false)}
+        onAddFiles={(added) => {
+          for (const [path, content] of Object.entries(added)) editFile(path, content);
+        }}
         onFix={(text) => {
           setMode("build");
           modeRef.current = "build";

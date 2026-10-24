@@ -9,6 +9,8 @@ type Options = {
   /** Project name. The same name updates the same project, a new name creates one. */
   name: string;
   files: Record<string, PublishFile>;
+  /** Environment variables the deployed site's server functions read (API keys from connectors). */
+  env?: Record<string, string> | undefined;
   onStatus?: (state: string) => void;
 };
 
@@ -42,7 +44,7 @@ function explain(status: number, data: unknown): string {
  * Uploads the project files straight to Vercel (no Git integration needed) as a production
  * deployment and waits until it is live or has failed.
  */
-export async function deployToVercel({ token, teamId, name, files, onStatus }: Options): Promise<VercelResult> {
+export async function deployToVercel({ token, teamId, name, files, env, onStatus }: Options): Promise<VercelResult> {
   const created = await call<{
     id?: string;
     url?: string;
@@ -60,6 +62,7 @@ export async function deployToVercel({ token, teamId, name, files, onStatus }: O
         encoding: "base64",
       })),
       projectSettings: { framework: "vite" },
+      ...(env && Object.keys(env).length > 0 ? { env } : {}),
     }),
   });
   if (created.status !== 200 || !created.data.id) throw new VercelError(explain(created.status, created.data));
