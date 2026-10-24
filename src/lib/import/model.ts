@@ -65,7 +65,8 @@ export type Media = {
 };
 
 export type SiteModel = {
-  source: "wordpress";
+  /** How it was read: through WordPress' own API, or by drawing the pages in a browser. */
+  source: "wordpress" | "rendered";
   /** The address that was imported. */
   url: string;
   name: string;

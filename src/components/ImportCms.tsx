@@ -9,7 +9,7 @@ import { createProjectFromJob, designSite, fetchSite, nextImages, probeSite, typ
 
 type Phase = "idle" | "probing" | "probed" | "fetching" | "images" | "ready" | "designing" | "saving";
 
-/** Reads a WordPress site into a project: check the site, fetch the content and pictures, and open it. */
+/** Reads a website (WordPress, Joomla, Drupal, Wix, Squarespace) into a project: check the site, fetch the content and pictures, and open it. */
 export function ImportCms() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -93,17 +93,17 @@ export function ImportCms() {
     <>
       <button type="button" onClick={() => setOpen(true)} className="flex items-center gap-2 rounded-xl border border-line bg-surface/60 px-4 py-2.5 text-[13.5px] text-muted backdrop-blur transition hover:border-line-strong hover:text-fg">
         <Globe className="size-4" />
-        Importer fra WordPress
+        Importer nettsted
       </button>
 
       <AnimatePresence>
         {open && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="card max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-3xl p-6 text-left" role="dialog" aria-label="Importer fra WordPress">
+            <div className="card max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-3xl p-6 text-left" role="dialog" aria-label="Importer nettsted">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-[18px] font-semibold tracking-tight">Importer fra WordPress</h2>
-                  <p className="mt-1 text-[13px] text-muted">Pivolar leser sidene, innleggene og bildene med vanlig kode, uten AI. Nettstedet ditt endres ikke.</p>
+                  <h2 className="text-[18px] font-semibold tracking-tight">Importer nettsted</h2>
+                  <p className="mt-1 text-[13px] text-muted">Pivolar leser sidene, innleggene og bildene med vanlig kode, uten AI. Fungerer for WordPress, Joomla, Drupal, Wix og Squarespace. Nettstedet ditt endres ikke.</p>
                 </div>
                 <button type="button" onClick={close} disabled={busy} className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40" aria-label="Lukk">
                   <X className="size-4" />
@@ -136,6 +136,8 @@ export function ImportCms() {
                       <p className="mt-1">
                         WordPress. {probe.counts.pages ?? "?"} sider, {probe.counts.posts ?? "?"} innlegg og {probe.counts.media ?? "?"} bilder i mediebiblioteket.
                       </p>
+                    ) : probe.renderable ? (
+                      <p className="mt-1">{probe.notes[0]}</p>
                     ) : (
                       <p className="mt-1">{probe.notes[0] ?? "Innholdet kan ikke leses herfra ennå."}</p>
                     )}
@@ -199,7 +201,7 @@ export function ImportCms() {
                     {phase === "saving" && <Loader2 className="size-4 animate-spin" />}
                     Åpne som prosjekt
                   </button>
-                ) : probe?.rest && phase === "probed" ? (
+                ) : (probe?.rest || probe?.renderable) && phase === "probed" ? (
                   <button type="button" onClick={() => void run()} disabled={!owner} className="bg-brand flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[14px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-50">
                     Hent innholdet
                   </button>

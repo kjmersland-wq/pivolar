@@ -6,7 +6,7 @@ import type { SiteModel } from "./model";
 
 /** Calls to the import route from the browser, and the step that turns a finished import into a project. */
 
-export type Probe = { cms: string; rest: boolean; name: string; description: string; language: string | null; counts: { pages: number | null; posts: number | null; media: number | null }; notes: string[] };
+export type Probe = { cms: string; renderable: boolean; rest: boolean; name: string; description: string; language: string | null; counts: { pages: number | null; posts: number | null; media: number | null }; notes: string[] };
 export type Summary = { name: string; pages: number; posts: number; media: number; unknownBlocks: number; plugins: { name: string; pages: number }[]; warnings: string[]; truncated: boolean };
 export type Step = { stored: number; failed: number; remaining: number; total: number; status: "fetched" | "images_done" };
 
@@ -54,7 +54,7 @@ export async function createProjectFromJob(job: string, url: string): Promise<{ 
       loaded.model.name || "Importert nettsted",
       built.files,
       { source: "cms", fileName: url, at: Date.now(), skippedBinaries: [], omittedSecrets: [], cms: { url, job, pages: built.report.routes, images: built.report.images } },
-      "WordPress (importert)",
+      loaded.model.source === "rendered" ? "Nettsted (importert)" : "WordPress (importert)",
     );
     return saved.ok ? { ok: true, id: saved.project.id, report: built.report } : { ok: false, error: saved.error };
   } catch (error) {

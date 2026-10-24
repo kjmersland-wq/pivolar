@@ -4,11 +4,12 @@ import { audit } from "@/lib/audit";
 import { loadModel, runImagesStep, saveJob } from "@/lib/import/job";
 import { ImportFetchError } from "@/lib/import/safe-fetch";
 import { toSkeleton, roughTokens } from "@/lib/import/skeleton";
+import { crawlRendered } from "@/lib/import/rendered";
 import { fetchWordPress, probeWordPress } from "@/lib/import/wordpress";
 import { limit } from "@/lib/quota/server";
 import { createClient } from "@/lib/supabase/server";
 
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 const Site = z.object({
   action: z.enum(["probe", "fetch"]),
@@ -22,7 +23,7 @@ const Body = z.union([Site, Job]);
 /**
  * Reads a website into Pivolar, with plain code and no AI.
  *   probe   is it WordPress, can it be read through the API, and how much is there?
- *   fetch   read pages, posts and the list of pictures into a saved job
+ *   fetch   read pages, posts and the list of pictures into a saved job (through the API when there is one, otherwise by drawing the pages in a browser)
  *   images  fetch the next pictures of a job (call until status is images_done)
  *   get     the content model of a job, with the stored pictures filled in
  * Rate limits and the on/off switch for imports apply (see lib/quota).
@@ -51,9 +52,14 @@ export async function POST(request: Request) {
 
     const probe = await probeWordPress(data.url);
     if (data.action === "probe") return NextResponse.json({ probe });
-    if (!probe.rest) return NextResponse.json({ error: probe.notes[0] ?? "Innholdet kan ikke leses herfra ennå.", probe }, { status: 422 });
+    if (!probe.rest && !probe.renderable) return NextResponse.json({ error: probe.notes[0] ?? "Innholdet kan ikke leses herfra.", probe }, { status: 422 });
+    // Drawing pages in a browser costs far more than reading an API, so it has an allowance of its own.
+    if (!probe.rest) {
+      const stopRender = await limit("render");
+      if (stopRender) return stopRender;
+    }
 
-    const model = await fetchWordPress(data.url, probe);
+    const model = probe.rest ? await fetchWordPress(data.url, probe) : await crawlRendered(data.url, probe);
     const db = await createClient();
     const { data: auth } = await db.auth.getUser();
     if (!auth.user) return NextResponse.json({ error: "Du må logge inn." }, { status: 401 });

@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { BrowserUnavailableError, launchBrowser } from "../browser.ts";
 import { assertPublicUrl, AnalyzeError, isPublicHost } from "./guard.ts";
 import { MEASURE_SOURCE } from "./measure-script.ts";
 import type { Spec } from "./condense.ts";
@@ -15,28 +15,14 @@ const TOTAL_TIMEOUT_MS = 110_000;
 const MAX_SHOTS = 12;
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
-const LOCAL_CHROME = [
-  process.env.CHROME_PATH,
-  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "/usr/bin/google-chrome",
-  "/usr/bin/chromium",
-  "/usr/bin/chromium-browser",
-].filter(Boolean) as string[];
-
 export type Analysis = { spec: Spec; shots: Uint8Array[]; finalUrl: string };
 
 async function launch() {
-  const puppeteer = (await import("puppeteer-core")).default;
-  if (process.env.VERCEL) {
-    const chromium = (await import("@sparticuz/chromium")).default;
-    return puppeteer.launch({ args: chromium.args, executablePath: await chromium.executablePath(), headless: true, defaultViewport: VIEWPORT });
+  try {
+    return await launchBrowser(VIEWPORT);
+  } catch (error) {
+    throw error instanceof BrowserUnavailableError ? new AnalyzeError(error.message) : error;
   }
-  const executablePath = LOCAL_CHROME.find((p) => existsSync(p));
-  if (!executablePath) throw new AnalyzeError("Fant ingen nettleser lokalt. Sett CHROME_PATH til chrome.exe.");
-  return puppeteer.launch({ executablePath, headless: true, defaultViewport: VIEWPORT, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 }
 
 export async function analyzeSite(input: string, options: { maxBlocks?: number } = {}): Promise<Analysis> {

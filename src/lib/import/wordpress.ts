@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { htmlToBlocks, navFrom } from "./clean.ts";
 import { countBlocks, imagesIn, rewriteImages, type Media, type Page, type SiteModel } from "./model.ts";
 import { extractTheme, lostFonts, stylesheetLinks, THEME_LIMITS, type Theme } from "./theme.ts";
+import { RENDER_LIMITS } from "./rendered.ts";
 import { createRobots, ImportFetchError, safeFetch, type FetchLimits, type SafeResponse } from "./safe-fetch.ts";
 
 /**
@@ -21,11 +22,13 @@ export const IMPORT_LIMITS = {
   pageSize: 100,
 };
 
-type Fetcher = (url: string, limits?: FetchLimits) => Promise<SafeResponse>;
+export type Fetcher = (url: string, limits?: FetchLimits) => Promise<SafeResponse>;
 export type Deps = { fetch?: Fetcher; allowed?: (url: string) => Promise<boolean>; now?: () => number };
 
 export type Probe = {
-  cms: "wordpress" | "unknown";
+  cms: "wordpress" | "joomla" | "drupal" | "wix" | "squarespace" | "unknown";
+  /** Can the pages be read by drawing them in a browser? True when the front page opened and robots.txt allows it. */
+  renderable: boolean;
   /** Can the content be read through the REST API? */
   rest: boolean;
   /** The start of every REST address, either `…/wp-json` or `…/?rest_route=`. */
@@ -72,11 +75,23 @@ async function getJson(fetcher: Fetcher, allowed: (u: string) => Promise<boolean
   }
 }
 
+const CMS_NAMES: Record<Probe["cms"], string> = { wordpress: "Dette WordPress-nettstedet", joomla: "Dette Joomla-nettstedet", drupal: "Dette Drupal-nettstedet", wix: "Dette Wix-nettstedet", squarespace: "Dette Squarespace-nettstedet", unknown: "Dette nettstedet" };
+
+/** Which system made the page, from the generator tag and the addresses it loads from. */
+export function detectCms(generator: string, html: string): Probe["cms"] {
+  if (/^WordPress/i.test(generator) || /\/wp-content\//.test(html)) return "wordpress";
+  if (/joomla/i.test(generator)) return "joomla";
+  if (/drupal/i.test(generator) || /\/sites\/default\/files\//.test(html)) return "drupal";
+  if (/wix/i.test(generator) || /wixstatic\.com|parastorage\.com/.test(html)) return "wix";
+  if (/squarespace/i.test(generator) || /static1\.squarespace\.com|squarespace-cdn\.com/.test(html)) return "squarespace";
+  return "unknown";
+}
+
 /** Finds out whether the site is WordPress and whether its content can be read through the API, and how much there is. */
 export async function probeWordPress(input: string, deps: Deps = {}): Promise<Probe> {
   const { fetcher, allowed } = tools(deps);
   const base = siteBase(input);
-  const probe: Probe = { cms: "unknown", rest: false, restBase: null, base, name: "", description: "", language: null, counts: { pages: null, posts: null, media: null }, notes: [] };
+  const probe: Probe = { cms: "unknown", renderable: false, rest: false, restBase: null, base, name: "", description: "", language: null, counts: { pages: null, posts: null, media: null }, notes: [] };
 
   if (!(await allowed(`${base}/`))) {
     probe.notes.push("Nettstedet ber roboter holde seg unna (robots.txt), så Pivolar henter ingenting herfra.");
@@ -104,15 +119,17 @@ export async function probeWordPress(input: string, deps: Deps = {}): Promise<Pr
       const $ = cheerio.load(html);
       probe.language = $("html").attr("lang") ?? null;
       if (!probe.name) probe.name = $("meta[property='og:site_name']").attr("content") ?? decode($("title").first().text());
-      if (probe.cms === "unknown" && (/^WordPress/i.test($("meta[name='generator']").attr("content") ?? "") || /\/wp-content\//.test(html))) probe.cms = "wordpress";
+      probe.renderable = true;
+      if (probe.cms === "unknown") probe.cms = detectCms($("meta[name='generator']").attr("content") ?? "", html);
     }
   } catch (error) {
     if (error instanceof ImportFetchError && error.code === "blocked") throw error;
     probe.notes.push("Fikk ikke hentet forsiden.");
   }
 
-  if (probe.cms === "wordpress" && !probe.rest) probe.notes.push("Dette er WordPress, men REST-API-et er stengt eller blokkert. Innholdet kan hentes ved å lese sidene i stedet (kommer), eller du kan eksportere fra WordPress (Verktøy → Eksporter).");
-  if (probe.cms === "unknown" && probe.notes.length === 0) probe.notes.push("Dette ser ikke ut som WordPress. Joomla, Drupal, Wix og Squarespace kommer.");
+  if (!probe.rest && probe.renderable) probe.notes.push(`${CMS_NAMES[probe.cms]} kan ikke leses direkte, men sidene kan leses ved å tegne dem i en nettleser. Det tar lengre tid og henter inntil ${RENDER_LIMITS.pages} sider.`);
+  else if (probe.cms === "wordpress" && !probe.rest) probe.notes.push("Dette er WordPress, men REST-API-et er stengt eller blokkert, og forsiden kunne ikke åpnes. Du kan eksportere fra WordPress (Verktøy → Eksporter).");
+  else if (!probe.rest && probe.notes.length === 0) probe.notes.push("Fikk ikke åpnet forsiden, så innholdet kan ikke leses herfra.");
 
   if (probe.rest && probe.restBase) {
     for (const [key, route] of [["pages", "/wp/v2/pages"], ["posts", "/wp/v2/posts"], ["media", "/wp/v2/media"]] as const) {
@@ -152,7 +169,7 @@ async function collect(fetcher: Fetcher, allowed: (u: string) => Promise<boolean
 }
 
 /** The colours and fonts of the front page and of the first few style sheets it loads. A sheet that cannot be read is skipped; the theme then rests on what could be. */
-async function readTheme(fetcher: Fetcher, allowed: (u: string) => Promise<boolean>, html: string, base: string, deadline: number, now: () => number, requests: { n: number }): Promise<Theme> {
+export async function readTheme(fetcher: Fetcher, allowed: (u: string) => Promise<boolean>, html: string, base: string, deadline: number, now: () => number, requests: { n: number }): Promise<Theme> {
   const sheets: string[] = [];
   for (const href of stylesheetLinks(html, base)) {
     if (now() > deadline) break;

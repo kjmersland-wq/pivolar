@@ -304,11 +304,19 @@ function wpSite(options: { rest?: boolean; robots?: string; wordpress?: boolean;
 
   // The API shut, but the page says WordPress
   const closed = await probeWordPress(SITE, { fetch: wpSite({ rest: false }).fetcher });
-  assert.deepEqual([closed.cms, closed.rest], ["wordpress", false]);
-  assert.match(closed.notes[0]!, /REST-API-et er stengt/);
+  assert.deepEqual([closed.cms, closed.rest, closed.renderable], ["wordpress", false, true]);
+  assert.match(closed.notes[0]!, /tegne dem i en nettleser/, "the pages can still be read by drawing them");
   const other = await probeWordPress(SITE, { fetch: wpSite({ rest: false, wordpress: false }).fetcher });
-  assert.deepEqual([other.cms, other.rest], ["unknown", false]);
-  assert.match(other.notes[0]!, /Joomla, Drupal, Wix og Squarespace kommer/);
+  assert.deepEqual([other.cms, other.rest, other.renderable], ["unknown", false, true]);
+  assert.match(other.notes[0]!, /tegne dem i en nettleser/);
+  // Which system it is, from the page itself
+  const { detectCms } = await import("../src/lib/import/wordpress.ts");
+  assert.equal(detectCms("Joomla! - Open Source Content Management", ""), "joomla");
+  assert.equal(detectCms("Drupal 10 (https://www.drupal.org)", ""), "drupal");
+  assert.equal(detectCms("", '<img src="https://static.wixstatic.com/media/a.jpg">'), "wix");
+  assert.equal(detectCms("", '<script src="https://static1.squarespace.com/x.js">'), "squarespace");
+  assert.equal(detectCms("WordPress 6.6", ""), "wordpress");
+  assert.equal(detectCms("", "<html></html>"), "unknown");
   // The site asks robots to stay away
   const noRobots = wpSite({ robots: "User-agent: *\nDisallow: /\n" });
   const refused = await probeWordPress(SITE, { fetch: noRobots.fetcher });

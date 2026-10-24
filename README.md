@@ -205,3 +205,13 @@ Alt i importen skjer med vanlig kode. AI brukes på ett sted, og bare hvis eiere
 
 - **Nettleserlagringen** er liten (ca. 5 MB). Før prosjektet lages, måles størrelsen mot det som er ledig (høyst ca. 2,4 millioner tegn til sammen, med margin). Er nettstedet for stort, utelates de eldste innleggene til det passer, og det står i importnotatet (`IMPORT.md`) og i meldingen. Sidene utelates aldri, og innleggene som ble utelatt ligger fortsatt i importen på serveren. Passer ikke engang sidene, stopper importen med en klar melding om å slette gamle prosjekter.
 - **Eierbekreftelsen** («dette er mitt nettsted») skrives til `audit_log` når importen er lagret, med adresse, jobb og antall sider. Brukeren kan lese sin egen logg, men ikke skrive til den: det skjer gjennom funksjonen `log_audit`, som bare skriver for den innloggede, bare for handlinger på listen, og bare små data. Oppsett: kjør `supabase/migrations/20261024200000_pivolar_audit.sql` i Supabase. Mangler funksjonen, stoppes ikke importen.
+
+### Andre nettsteder: Joomla, Drupal, Wix og Squarespace
+
+Finnes det ingen åpen API (eller WordPress har stengt den), leser importen sidene ved å tegne dem i en nettleser (Chromium) og lese den ferdige siden. Samme rensing som for WordPress gjør hovedinnholdet til blokker, uten AI. Kontrollen sier hvilket system nettstedet bruker (`detectCms`) og om det kan leses på denne måten.
+
+- **Hva som hentes:** forsiden, menyen, sidene i `sitemap.xml` og lenker på forsiden, høyst 40 sider og 60 åpnede sider, innen 90 sekunder. Menyen, topp og bunn, sidekolonner og informasjonskapsel-bannere regnes ikke som innhold, og den første `h1` blir sidens tittel. Et innlegg gjenkjennes på `article:published_time`.
+- **Nettleseren er skrudd ned:** hver forespørsel går til en offentlig adresse (samme kontroll som analysatoren), bilder, skrifter og medier lastes aldri ned (bildene hentes senere av bildesteget, som sjekker hver fil), en side kan ikke sende den til et annet domene, den åpner ingen vinduer og laster ikke ned filer, og den lukkes etter en fast tid uansett. robots.txt følges, og eierbekreftelsen kreves som før.
+- **Adresser:** bare vanlige sider på samme nettsted. Filer, admin- og innloggingsområder og adresser med tegn som ruteren ville lest som mønster (`:`, `*`, `(`) hoppes over.
+- **Egen kvote:** 5 slike lesinger i timen (`render`), i tillegg til importkvoten.
+- **Grenser:** Skjemaer, søk, handlekurv og alt bak innlogging følger ikke med. Det står i importnotatet. Alt som ikke er en vanlig side (for eksempel innhold som bare lastes ved klikk) må legges til for hånd.
