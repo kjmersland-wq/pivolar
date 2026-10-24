@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { BarChart3, ChevronLeft, Code2, Download, ExternalLink, Eye, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Plug, Rocket, ScanSearch, Server, ShieldCheck, Smartphone, Tablet } from "lucide-react";
+import { BarChart3, ChevronLeft, Code2, Download, ExternalLink, Eye, Layers, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Plug, Rocket, ScanSearch, Server, ShieldCheck, Smartphone, Tablet } from "lucide-react";
 import { BudgetDialog } from "@/components/BudgetDialog";
 import { CheckDialog } from "@/components/CheckDialog";
 import { AnalyticsDialog } from "@/components/AnalyticsDialog";
@@ -20,6 +20,7 @@ import { ChatPanel, type Mode } from "@/components/ChatPanel";
 import { ComposeDialog } from "@/components/ComposeDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { Logo } from "@/components/Logo";
+import { ProjectPanel, type PanelTarget } from "@/components/ProjectPanel";
 import { PublishDialog } from "@/components/PublishDialog";
 import { QueuedBar } from "@/components/QueuedBar";
 import { Sandbox, type Device, type PickedElement, type View } from "@/components/Preview";
@@ -76,6 +77,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [hostingOpen, setHostingOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   // Set when the project was imported from GitHub; changes can then be sent back as a pull request.
   const [github] = useState(() => loadImportInfo(id)?.github ?? null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -377,6 +379,15 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
               <span className="hidden md:inline">Sammenlign</span>
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            title="Innstillinger, hemmeligheter, Git og andre valg for prosjektet"
+            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
+          >
+            <Layers className="size-3.5" />
+            <span className="hidden md:inline">Mer</span>
+          </button>
           <UsageMeter />
           <ThemeToggle />
           <button
@@ -432,6 +443,23 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           }}
         />
       )}
+      <ProjectPanel
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        onOpen={(target: PanelTarget) => {
+          const open = { analytics: setAnalyticsOpen, connectors: setConnectorsOpen, check: setCheckOpen, hosting: setHostingOpen, export: setExportOpen, publish: setPublishOpen, pr: setPrOpen }[target];
+          open(true);
+        }}
+        projectId={id}
+        name={name}
+        onRename={(next) => {
+          setName(next);
+          updateProject(id, { name: next });
+        }}
+        files={files}
+        messages={messages}
+        edits={edits}
+      />
       <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} onCompose={compose} initialName={name} />
       <CompareDialog
         open={compareOpen}

@@ -111,6 +111,22 @@ export function createProject(name = "Nytt prosjekt"): ProjectMeta {
   return project;
 }
 
+/**
+ * A copy of a project: the conversation, the edits and where it came from. Publishing details are not
+ * copied, so the copy cannot overwrite the original's repository or site.
+ */
+export function duplicateProject(id: string): ProjectMeta | null {
+  const source = getProject(id);
+  if (!source) return null;
+  const copy = createProject(`${source.name} (kopi)`);
+  const info = read<ImportInfo | null>(importKey(id), null);
+  write(msgKey(copy.id), read<UIMessage[]>(msgKey(id), []));
+  write(editsKey(copy.id), read<UserEdit[]>(editsKey(id), []));
+  if (info) write(importKey(copy.id), info);
+  bump(copy.id, source.framework ? { framework: source.framework } : {});
+  return copy;
+}
+
 export function getProject(id: string): ProjectMeta | undefined {
   return read<ProjectMeta[]>(LIST_KEY, []).find((p) => p.id === id);
 }

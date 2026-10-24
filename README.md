@@ -238,3 +238,13 @@ Under tabellfeltet kan eieren skrive en setning om appen og trykke «Foreslå ta
 - **Ny fane:** knappen «Ny fane» i verktøylinjen åpner forhåndsvisningen alene i en egen nettleserfane (`/p/<id>/full`), slik en besøkende ser siden. Fanen leser det samme prosjektet og følger med mens AI-en bygger i den andre fanen.
 - **Eksporter til GitHub:** i eksportdialogen kan et Pivolar-prosjekt sendes til et GitHub-repo som et ferdig Vite-prosjekt, i én commit, uten at noe publiseres noe sted og uten nøkler. Valg av repo-navn og privat/offentlig. Bruker `GITHUB_TOKEN` og publiseringsruten med bare GitHub slått på. Importerte prosjekter sendes som pull request i stedet.
 - **Nyhetsbrev og del-rad i «Sett sammen»:** to nye seksjoner. Nyhetsbrevet har et e-postfelt med skjult felt mot spam og sender til `/api/subscribe`, funksjonen Resend-koblingen legger inn (forhåndsvisningen sier fra at den virker først etter publisering). Del-raden har knapper for Facebook, X, LinkedIn, WhatsApp, e-post og «Kopier lenke», som åpner hvert nettverks egen delingsside uten skript fra dem.
+
+### Mer-panelet (prosjektsiden)
+
+Knappen «Mer» i verktøylinjen åpner prosjektets egen side, som «More» i Lovable. Menyen til venstre går til dialogene prosjektet bruker (analyse, database og koblinger, kontroll av sikkerhet og SEO, hosting, publisering og eksport) og til forbruket. Innstillingene er samlet i seksjoner:
+
+- **Prosjektdetaljer:** navn (kan endres), opphav, antall meldinger, AI-endringer (ferdige filendringer AI-en har gjort), dine egne endringer, filer, forbruk denne måneden og prosjekt-id.
+- **Publisering:** sist publisert, lenker til siden og repoet, og snarveier til publisering, hosting og forhåndsvisning i egen fane.
+- **Hemmeligheter:** hvilke koblinger som har lagrede verdier og hvor mange. Verdiene vises aldri, og hver kobling kan fjernes.
+- **Git:** hvor en importert kode kommer fra og pull request, eller eksport til GitHub.
+- **Handlinger og faresone:** dupliser prosjektet (samtale, filer og opphav, men ikke publiseringen, så kopien ikke kan overskrive den opprinnelige siden) og slett prosjektet, som spør to ganger.
