@@ -1,6 +1,7 @@
 import { convertToModelMessages, createUIMessageStreamResponse, generateImage, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
 import { chatModel } from "@/lib/ai-model";
+import { knowledgeSection } from "@/lib/knowledge";
 import { createAnalyzeTool, trimOldAnalyses } from "@/lib/analyze/tool";
 import { buildIndex, readFile, recentPaths, searchFiles, shouldIndex } from "@/lib/context";
 import { detectLoop, withNoteBeforeFinish, type LoopFinding, type StepLike } from "@/lib/guard/loop";
@@ -141,7 +142,7 @@ ${
 - Du skal ikke endre noen filer nå. Diskuter, foreslå og planlegg. Hold svarene korte og konkrete.`
 }
 
-${section}`;
+${knowledgeSection(all)}${section}`;
 }
 
 /**

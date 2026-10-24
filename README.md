@@ -262,3 +262,11 @@ Knappen «Prompt-hjelper» under tekstfeltet på forsiden åpner en veiviser: du
 ## Bilde av åpningssiden på hvert prosjekt
 
 Prosjektlisten viser nå et utsnitt av åpningssiden til hvert prosjekt. Forhåndsvisningen tegner selv et lite JPEG av toppen av siden (biblioteket html-to-image lastes inn i forhåndsvisningen første gang), ca. 6 sekunder etter at siden har satt seg, bare i skrivebordsvisning og høyst én gang i minuttet. Bildet sendes opp som tekst, kontrolleres (bare en liten JPEG slipper gjennom, både før lagring og ved lesing, siden teksten kommer fra kode AI-en har skrevet) og lagres i nettleseren (IndexedDB). Uten bilde vises en farge. Bildene følger ikke med til andre enheter, og slettes når prosjektet slettes. Prosjekter som kjøres på serveren (importert Next.js med mer) og rene HTML-sider får ikke bilde ennå.
+
+## Kunnskap: faste instrukser per prosjekt
+
+I Mer-panelet (seksjonen «Kunnskap») skriver eieren varige regler for AI-en i akkurat det prosjektet: tone, språk, hva den ikke skal røre og fakta om virksomheten, høyst 4 000 tegn. Ett klikk legger til vanlige regler (alltid norsk, uformell tone, ingen emojier, bare fargene i brand.json, små endringer, korte svar, ikke røre /api).
+
+- **Lagring:** som én skjult prosjektfil (`/KNOWLEDGE.md`), satt av eierens egne redigeringer helt i starten av samtalen. Den synker til kontoen som resten av prosjektet uten ny migrasjon, og å gå tilbake i samtalen tar den aldri bort.
+- **Beskyttet:** AI-en kan ikke skrive, endre eller slette filen, den vises ikke i filkart eller kodevisning, og den publiseres og eksporteres aldri.
+- **Bruk:** hver melding til AI-en får instruksene som en egen del av systemprompten, i en avgrenset blokk. Teksten renses (kontrolltegn og tagger som kunne lukket blokken fjernes). De gir ingen nye verktøy og kan ikke oppheve reglene ellers, og en melding fra eieren som strider mot dem, går foran.

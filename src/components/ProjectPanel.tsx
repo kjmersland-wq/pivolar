@@ -10,6 +10,7 @@ import { connectorById } from "@/lib/connectors";
 import { loadConnectors, removeConnector } from "@/lib/connectors/store";
 import type { FileMap, UserEdit } from "@/lib/files";
 import { deleteProject, duplicateProject, getProject, loadImportInfo, loadPublish } from "@/lib/projects";
+import { KNOWLEDGE_MAX, KNOWLEDGE_TEMPLATES, knowledgeOf } from "@/lib/knowledge";
 import { originLabel, projectStats } from "@/lib/project-stats";
 import { fetchUsage, NOK_PER_USD } from "@/lib/usage/client";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ const NAV: { target: PanelTarget; label: string; icon: Icon }[] = [
 
 const SECTIONS = [
   { id: "detaljer", label: "Prosjektdetaljer" },
+  { id: "kunnskap", label: "Kunnskap" },
   { id: "publisering", label: "Publisering" },
   { id: "hemmeligheter", label: "Hemmeligheter" },
   { id: "git", label: "Git" },
@@ -75,6 +77,7 @@ export function ProjectPanel({
   files,
   messages,
   edits,
+  onKnowledge,
 }: {
   open: boolean;
   onClose: () => void;
@@ -85,6 +88,8 @@ export function ProjectPanel({
   files: FileMap;
   messages: UIMessage[];
   edits: UserEdit[];
+  /** Saves the project's standing instructions for the AI. */
+  onKnowledge: (text: string) => void;
 }) {
   const router = useRouter();
   const scroller = useRef<HTMLDivElement>(null);
@@ -92,6 +97,8 @@ export function ProjectPanel({
   const [saved, setSaved] = useState(() => loadConnectors(projectId));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [draft, setDraft] = useState(name);
+  const stored = useMemo(() => knowledgeOf(files), [files]);
+  const [know, setKnow] = useState(stored);
 
   useEffect(() => {
     if (!open) return;
@@ -99,12 +106,14 @@ export function ProjectPanel({
     setSaved(loadConnectors(projectId));
     setConfirmDelete(false);
     setDraft(name);
+    setKnow(stored);
     /* eslint-enable react-hooks/set-state-in-effect */
     let cancelled = false;
     void fetchUsage().then((summary) => !cancelled && setMonth(summary ? summary.monthUsd : null));
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the text is read when the panel opens; typing is not overwritten by later file changes
   }, [open, projectId, name]);
 
   const project = open ? getProject(projectId) : undefined;
@@ -209,6 +218,34 @@ export function ProjectPanel({
                   <Row label="Prosjekt-id">
                     <code className="select-all break-all text-[12px] text-muted">{projectId}</code>
                   </Row>
+                </Card>
+
+                <Card id="kunnskap" title="Kunnskap" text="Faste regler for AI-en i dette prosjektet: tone, språk, hva den ikke skal røre, fakta om virksomheten. De leses i hver melding, følger prosjektet til kontoen din, og blir aldri publisert eller eksportert.">
+                  <div className="space-y-3 p-5">
+                    <textarea
+                      value={know}
+                      onChange={(e) => setKnow(e.target.value.slice(0, KNOWLEDGE_MAX))}
+                      rows={7}
+                      aria-label="Kunnskap"
+                      placeholder={"For eksempel:\nVi er et lite brenneri på Grünerløkka.\nTonen er uformell. Skriv alltid norsk.\nIkke bruk emojier."}
+                      className="w-full resize-y rounded-xl border border-line bg-surface px-3.5 py-2.5 text-[13.5px] leading-relaxed outline-none transition focus:border-line-strong"
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {KNOWLEDGE_TEMPLATES.map((item) => (
+                        <button key={item.label} type="button" onClick={() => !know.includes(item.line) && setKnow((current) => `${current.trim() ? `${current.trim()}\n` : ""}${item.line}`.slice(0, KNOWLEDGE_MAX))} className="rounded-full border border-line px-2.5 py-1 text-[12px] text-muted transition hover:border-line-strong hover:text-fg">
+                          + {item.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[12px] text-faint">
+                        {know.length} av {KNOWLEDGE_MAX} tegn
+                      </span>
+                      <button type="button" onClick={() => onKnowledge(know)} disabled={know.trim() === stored} className="bg-brand rounded-xl px-4 py-2 text-[13px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-50">
+                        {know.trim() === stored ? "Lagret" : "Lagre"}
+                      </button>
+                    </div>
+                  </div>
                 </Card>
 
                 <Card id="publisering" title="Publisering" text="Der siden ligger nå, og valgene for hvordan den publiseres.">

@@ -151,8 +151,14 @@ export function normalizePath(path: string) {
   return value;
 }
 
-/** Files the AI and the user must not change: the sandbox entry point and the inspector it loads. */
-export const PROTECTED_PATHS = new Set(["/index.tsx", "/atelier-inspector.js"]);
+/** The owner's standing instructions for the project. A hidden file: see lib/knowledge.ts. */
+export const KNOWLEDGE_PATH = "/KNOWLEDGE.md";
+
+/**
+ * Files the AI and the user must not change, and that are never shown, published or exported: the
+ * sandbox entry point and the inspector it loads, and the owner's instructions (changed only from the project panel).
+ */
+export const PROTECTED_PATHS = new Set(["/index.tsx", "/atelier-inspector.js", KNOWLEDGE_PATH]);
 
 export type ToolResult = { ok: boolean; message: string };
 
@@ -213,7 +219,8 @@ export function deriveFiles(messages: UIMessage[], edits: UserEdit[] = []): File
   const applyEdits = (match: (at: number) => boolean) => {
     for (const edit of edits) {
       const path = normalizePath(edit.path);
-      if (match(edit.at) && !PROTECTED_PATHS.has(path)) files[path] = edit.content;
+      // The instructions are the one protected file that the owner's own edits may set.
+      if (match(edit.at) && (!PROTECTED_PATHS.has(path) || path === KNOWLEDGE_PATH)) files[path] = edit.content;
     }
   };
   messages.forEach((message, index) => {
