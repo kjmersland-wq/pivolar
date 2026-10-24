@@ -1,4 +1,5 @@
 import type { Block, Page, SiteModel } from "./model.ts";
+import { HEAD_MODULE } from "../publish/prerender.ts";
 
 /**
  * Turns an imported site into a Pivolar project, with fixed templates and no AI: the content stays
@@ -330,21 +331,24 @@ export function Layout({ children }: { children: ReactNode }) {
 
 const PAGE_VIEW = `import { Blocks } from "./Blocks";
 import { Seo } from "./Seo";
-import { site } from "../content/site";
+import { pageHead } from "../lib/head";
 import type { PageData } from "../lib/types";
 
+// The day as written on the old site, the same on the server that draws the page and in the browser.
 const formatDate = (date: string) => {
-  const parsed = new Date(date);
-  return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric" });
+  const day = /^(\\d{4})-(\\d{2})-(\\d{2})/.exec(date);
+  const parsed = day ? new Date(Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3]))) : new Date(date);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 };
 
 /** One page or post: the title, the date for a post, the picture and the content. */
 export function PageView({ page }: { page: PageData }) {
   const firstImage = page.blocks.find((b) => b.type === "image");
   const showFeatured = page.featuredImage && !(firstImage && firstImage.type === "image" && firstImage.src === page.featuredImage);
+  const head = pageHead(page);
   return (
     <article className="space-y-5">
-      <Seo title={page.seo.title ?? page.title + " – " + site.name} description={page.seo.description ?? (page.excerpt || undefined)} image={page.seo.image ?? page.featuredImage ?? undefined} />
+      <Seo title={head.title} description={head.description} image={head.image} />
       <header className="space-y-2">
         <h1 className="text-4xl font-semibold tracking-tight">{page.title}</h1>
         {page.kind === "post" && page.date ? <p className="text-sm text-slate-500">{formatDate(page.date)}</p> : null}
@@ -553,6 +557,7 @@ export function buildSiteProject(model: SiteModel, imageUrl: (file: string) => s
     "/styles.css": STYLES,
     "/lib/types.ts": TYPES,
     "/lib/inline.tsx": INLINE,
+    "/lib/head.ts": HEAD_MODULE,
     "/components/Blocks.tsx": BLOCKS,
     "/components/Seo.tsx": SEO,
     "/components/Layout.tsx": LAYOUT,

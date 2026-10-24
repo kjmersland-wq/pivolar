@@ -171,3 +171,12 @@ Knappen **Importer fra WordPress** på startsiden tar deg gjennom hele løpet: s
 - Vercel og GitHub Pages får en regel som åpner siden for alle adresser som ikke er filer (Netlify, Cloudflare, Render og Caddy hadde den fra før).
 
 Begrensning: nettstedet er en enkeltsideapp, så en søkemotor ser innholdet først etter at JavaScript har kjørt. For SEO bør den ferdige utgaven forhåndsrendres (planlagt: statisk eksport).
+
+### Ferdige sider for søkemotorer
+
+Et importert nettsted tegnes av en ruter i nettleseren, så en søkemotor som ikke kjører JavaScript ville sett en tom side. Derfor bygger publiseringen også hver side som ferdig HTML (`vite build`, deretter `vite build --ssr` og `scripts/prerender.mjs`). Det er den samme koden som tegner siden i nettleseren, uten AI.
+
+- Hver adresse får en egen fil (`om-oss/index.html`) med egen tittel, beskrivelse, canonical-adresse og delingsbilde, og et sitemap med alle sidene når nettstedets adresse er kjent (`VERCEL_PROJECT_PRODUCTION_URL` eller `SITE_URL`). Uten kjent adresse får ingen side en canonical som peker på forsiden.
+- Nettleseren tar over den ferdige siden (`hydrateRoot`) når den hører til adressen, og tegner fra bunnen ellers (ukjent adresse, gammel kopi). Vertene åpner derfor fortsatt nettstedet på ukjente adresser.
+- Adressene kommer fra et annet nettsted. Hver blir sjekket før noe skrives: ingen `..`, skråstrek eller ugyldig koding i en mappe, ingenting under `assets`, `images` eller `api`, og filen må ligge i byggemappen. Tekst fra det gamle nettstedet escapes og leses aldri som mønster.
+- Prosjekter som ikke er importert bygges som før.

@@ -89,7 +89,7 @@ const CADDYFILE = `# Sett DOMAIN til domenet ditt (for eksempel minside.no) så 
 {$DOMAIN::80} {
 	root * /srv
 	encode zstd gzip
-	try_files {path} /index.html
+	try_files {path} {path}/index.html /index.html
 	file_server
 }
 `;

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -243,6 +244,86 @@ const render = (location: string) => renderToString(React.createElement(StaticRo
   assert.match(client, /buildSiteProject\(loaded\.model/);
   assert.match(client, /source: "cms"/);
   assert.doesNotMatch(client, /anthropic|openai|streamText|generateText/i, "the whole import, from the button to the project, uses no AI");
+}
+
+// --- pre-rendering: every page is also written as finished HTML, so search engines need no JavaScript
+{
+  const deploy = buildDeployableProject(files, "Kaffebar");
+  const scripts = JSON.parse(deploy["package.json"]!).scripts as Record<string, string>;
+  assert.match(scripts.build!, /vite build --ssr src\/entry-server\.tsx --outDir \.ssr && node scripts\/prerender\.mjs$/, "the build draws the pages after building the site");
+  for (const f of ["src/entry-server.tsx", "scripts/prerender.mjs", "src/lib/head.ts"]) assert.ok(f in deploy, `${f} is in the published project`);
+  assert.match(deploy[".gitignore"]!, /^\.ssr$/m);
+  assert.match(deploy["src/main.tsx"]!, /hydrateRoot\(root, app\)/, "the browser takes over the finished page");
+  assert.match(deploy["src/main.tsx"]!, /root\.replaceChildren\(\);\s*createRoot/, "and draws from scratch on an address with no finished page");
+  // A project that is not an import is built as before
+  const plain = buildDeployableProject({ "/App.tsx": "export default function App() { return <h1>Hei</h1>; }" }, "Plain");
+  assert.equal(JSON.parse(plain["package.json"]!).scripts.build, "vite build");
+  assert.ok(!("scripts/prerender.mjs" in plain) && !("src/entry-server.tsx" in plain));
+
+  // The script is run for real, on the code the project would be built from
+  const prepare = (name: string, site: SiteModel, siteUrl: string) => {
+    const built = buildDeployableProject(buildSiteProject(site, url).files, "Kaffebar");
+    const dir = join(root, "node_modules", ".cache", name);
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(join(dir, "dist"), { recursive: true });
+    mkdirSync(join(dir, "scripts"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{ "type": "commonjs" }');
+    writeFileSync(join(dir, "scripts", "prerender.mjs"), built["scripts/prerender.mjs"]!);
+    writeFileSync(join(dir, "dist", "index.html"), built["index.html"]!.replaceAll("__SITE_URL__", siteUrl));
+    for (const [path, code] of Object.entries(built)) {
+      if (!/^src\/.*\.tsx?$/.test(path) || /\.d\.ts$|App\.test|main\.tsx|test-setup/.test(path)) continue;
+      const js = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+      const target = join(dir, ".ssr", path.slice(4).replace(/\.tsx?$/, ".js"));
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, js);
+    }
+    const run = spawnSync(process.execPath, ["scripts/prerender.mjs"], { cwd: dir, encoding: "utf8", env: { ...process.env, VERCEL_PROJECT_PRODUCTION_URL: siteUrl ? siteUrl.replace("https://", "") : "", SITE_URL: "" } });
+    return { dir, run, read: (p: string) => readFileSync(join(dir, "dist", p), "utf8"), has: (p: string) => existsSync(join(dir, "dist", p)) };
+  };
+
+  const site = prepare("pivolar-prerender-test", model, "https://kaffe.example");
+  assert.equal(site.run.status, 0, site.run.stderr);
+  assert.match(site.run.stdout, /prerender: 4 pages/);
+  const about = site.read("om-oss/index.html");
+  assert.match(about, /<title>Om oss \| Kaffebar<\/title>/, "its own title");
+  assert.match(about, /<meta name="description" content="Vi brenner kaffe" \/>/, "its own description");
+  assert.match(about, /<link rel="canonical" href="https:\/\/kaffe\.example\/om-oss" \/>/);
+  assert.equal((about.match(/rel="canonical"/g) ?? []).length, 1);
+  assert.match(about, /<meta property="og:url" content="https:\/\/kaffe\.example\/om-oss" \/>/);
+  assert.match(about, /<meta property="og:title" content="Om oss \| Kaffebar" \/>/);
+  assert.match(about, /<meta property="og:image" content="[^"]*bbbbbbbbbbbb\.webp" \/>/, "the picture of the page is the share picture");
+  assert.match(about, /<html lang="nb-NO"/);
+  assert.match(about, /<div id="root" data-path="\/om-oss"><div[^>]*>[\s\S]*<h1[^>]*>Om oss – Kaffebar<\/h1>/, "the content is in the file itself");
+  assert.match(about, /<script type="module"[^>]*src="\/src\/main\.tsx"/, "the browser script is still loaded");
+  assert.match(site.read("2026/03/nytt-brygg/index.html"), /5\. mars 2026/);
+  assert.match(site.read("index.html"), /<link rel="canonical" href="https:\/\/kaffe\.example\/" \/>[\s\S]*Brent lokalt/, "the front page, made from the posts");
+  const sitemap = site.read("sitemap.xml");
+  assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]), ["https://kaffe.example/om-oss", "https://kaffe.example/kontakt", "https://kaffe.example/2026/03/nytt-brygg", "https://kaffe.example/"], "every page is in the sitemap");
+
+  // Without a known address no page claims the front page as its own
+  const bare = prepare("pivolar-prerender-bare", model, "");
+  assert.equal(bare.run.status, 0, bare.run.stderr);
+  assert.doesNotMatch(bare.read("om-oss/index.html"), /rel="canonical"|og:url/);
+  assert.ok(!bare.has("sitemap.xml"), "no sitemap without an address to put in it");
+
+  // Addresses come from another site: none may write outside the build folder, over its files, or break the page
+  const hostile: SiteModel = {
+    ...model,
+    pages: [
+      page({ id: "page-1", path: "/ok", title: "Ok", seo: { description: 'A "quoted" <b>tag</b> $& price $1' }, blocks: [{ type: "paragraph", html: "Hei" }] }),
+      page({ id: "page-2", path: "/../utenfor", title: "Ut", blocks: [] }),
+      page({ id: "page-3", path: "/%2e%2e/utenfor2", title: "Ut2", blocks: [] }),
+      page({ id: "page-4", path: "/assets/x", title: "Eiendeler", blocks: [] }),
+      page({ id: "page-5", path: "/a%2Fb", title: "Skråstrek", blocks: [] }),
+      page({ id: "page-6", path: "/%zz", title: "Ugyldig", blocks: [] }),
+    ],
+  };
+  const evil = prepare("pivolar-prerender-evil", hostile, "https://kaffe.example");
+  assert.equal(evil.run.status, 0, evil.run.stderr);
+  assert.match(evil.run.stdout, /prerender: 2 pages/, "only the front page and /ok were written");
+  assert.ok(!existsSync(join(evil.dir, "utenfor")) && !existsSync(join(evil.dir, "utenfor2")) && !evil.has("assets/x/index.html") && !evil.has("a/b/index.html"));
+  assert.match(evil.read("ok/index.html"), /<meta name="description" content="A &quot;quoted&quot; &lt;b&gt;tag&lt;\/b&gt; \$&amp; price \$1" \/>/, "text from the old site is escaped and never read as a pattern");
+  for (const d of [site.dir, bare.dir, evil.dir]) rmSync(d, { recursive: true, force: true });
 }
 
 rmSync(out, { recursive: true, force: true });

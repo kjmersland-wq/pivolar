@@ -71,7 +71,7 @@ const app = (extra: Record<string, string> = {}) => ({ "/App.tsx": "export defau
   const own = hostFiles("hetzner", "min-side");
   assert.deepEqual(Object.keys(own), ["Dockerfile", "Caddyfile", "docker-compose.yml", "HOSTING.md"]);
   assert.match(own.Dockerfile!, /npm run build[\s\S]*COPY --from=build \/app\/dist \/srv/);
-  assert.match(own.Caddyfile!, /try_files \{path\} \/index\.html/);
+  assert.match(own.Caddyfile!, /try_files \{path\} \{path\}\/index\.html \/index\.html/, "a finished page is served for its address, and the site opens for any other");
   assert.match(own["docker-compose.yml"]!, /DOMAIN: \$\{DOMAIN:-:80\}/);
   assert.match(own["HOSTING.md"]!, /docker compose up -d --build/);
 }

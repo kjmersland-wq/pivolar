@@ -3,6 +3,7 @@ import type { HostId } from "../hosting/catalog.ts";
 import { hostFiles } from "../hosting/files.ts";
 import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, type FileMap } from "../files.ts";
 import { metaTags, readBrand, type Brand } from "./brand.ts";
+import { BUILD_COMMAND, ENTRY_SERVER, HEAD_MODULE, MAIN_TSX as PRERENDER_MAIN, PRERENDER_SCRIPT, isPrerenderable } from "./prerender.ts";
 
 /** Lowercase, URL-safe name that works as a GitHub repo name and a Vercel project name. */
 export function slugify(name: string): string {
@@ -20,14 +21,14 @@ export function slugify(name: string): string {
   return slug || "atelier-app";
 }
 
-const PACKAGE_JSON = (name: string) =>
+const PACKAGE_JSON = (name: string, prerender: boolean) =>
   JSON.stringify(
     {
       name,
       private: true,
       version: "0.1.0",
       type: "module",
-      scripts: { dev: "vite", build: "vite build", preview: "vite preview", typecheck: "tsc --noEmit", test: "vitest run" },
+      scripts: { dev: "vite", build: prerender ? BUILD_COMMAND : "vite build", preview: "vite preview", typecheck: "tsc --noEmit", test: "vitest run" },
       dependencies: {
         react: "^19.0.0",
         "react-dom": "^19.0.0",
@@ -260,10 +261,11 @@ const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ "&": "&am
 export function buildDeployableProject(files: FileMap, title: string, options: { icons?: boolean; analytics?: { origin: string; projectId: string }; host?: HostId } = {}): Record<string, string> {
   const slug = slugify(title);
   const brand = readBrand(files, title);
+  const prerender = isPrerenderable(files);
   const counter = options.analytics ? trackingSnippet(options.analytics.origin, options.analytics.projectId) : "";
   const out: Record<string, string> = {
     ".github/workflows/ci.yml": CI_WORKFLOW,
-    "package.json": PACKAGE_JSON(slug),
+    "package.json": PACKAGE_JSON(slug, prerender),
     "vite.config.ts": VITE_CONFIG,
     "tsconfig.json": TSCONFIG,
     "vercel.json": SECURITY_HEADERS,
@@ -282,9 +284,9 @@ export function buildDeployableProject(files: FileMap, title: string, options: {
   </body>
 </html>
 `,
-    ".gitignore": "node_modules\ndist\n.env\n.env.*\n.vercel\n",
+    ".gitignore": "node_modules\ndist\n.ssr\n.env\n.env.*\n.vercel\n",
     "README.md": `# ${title}\n\nBygget med Pivolar.\n\n\`\`\`sh\nnpm install\nnpm run dev\n\`\`\`\n`,
-    "src/main.tsx": MAIN_TSX,
+    "src/main.tsx": prerender ? PRERENDER_MAIN : MAIN_TSX,
     "src/vite-env.d.ts": '/// <reference types="vite/client" />\n',
     "src/test-setup.ts": TEST_SETUP,
     "src/App.test.tsx": SMOKE_TEST,
@@ -298,6 +300,11 @@ export function buildDeployableProject(files: FileMap, title: string, options: {
     if (relative === "styles.css") continue;
     // Files under /public are served as they are (favicon, logo) and files under /api run as server functions on Vercel; everything else is source code.
     out[relative.startsWith("public/") || relative.startsWith("api/") ? relative : `src/${relative}`] = code;
+  }
+  if (prerender) {
+    out["src/entry-server.tsx"] = ENTRY_SERVER;
+    out["scripts/prerender.mjs"] = PRERENDER_SCRIPT;
+    if (!("src/lib/head.ts" in out)) out["src/lib/head.ts"] = HEAD_MODULE;
   }
   out["src/styles.css"] = buildStyles(files["/styles.css"] ?? "");
   // Settings for the chosen host sit next to the site, and never replace a file the site already has.
