@@ -236,7 +236,7 @@ const now = Date.parse("2026-10-24T10:00:00Z");
   assert.match(chat, /await gate\.release\(\)/);
   assert.ok(chat.indexOf("openAiGate(") < chat.indexOf("await request.json()"), "the checks come before the body is read");
   assert.match(chat, /content-length/);
-  for (const [path, route] of [["analyze", "analyze"], ["import/zip", "import"], ["github/import", "import"], ["export", "export"], ["github/pull-request", "pr"], ["publish", "publish"], ["runner", "runner"]] as const) {
+  for (const [path, route] of [["analyze", "analyze"], ["import/zip", "import"], ["import/cms", "import"], ["github/import", "import"], ["export", "export"], ["github/pull-request", "pr"], ["publish", "publish"], ["runner", "runner"]] as const) {
     assert.match(read(`src/app/api/${path}/route.ts`), new RegExp(`limit\\("${route}"\\)`), `${path} is rate limited`);
   }
   const runner = read("src/app/api/runner/route.ts");

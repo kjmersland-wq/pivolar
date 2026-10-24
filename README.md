@@ -135,3 +135,15 @@ Gruppen går inn i en fast tabell (`src/lib/hosting/rules.ts`) som sier hvilken 
 Importrapporten viser gruppen og anbefalt vert. Knappen **Hosting** i et prosjekt viser rangeringen og lar deg legge oppsettsfilene i prosjektet (filer som finnes fra før blir ikke overskrevet). For en server lages `Dockerfile` for språket (Node, Python eller PHP), `docker-compose.yml` med databasen prosjektet trenger, `.dockerignore`, en workflow som ber Coolify bygge på nytt, og `HOSTING.md` med stegene for Coolify og Dokku. Startkommandoen er gjettet ut fra rammeverket, så sjekk den.
 
 **Prosjektkjøring (Sandbox):** hver kjøring tilhører brukeren som startet den. Navnet bygges av en kortversjon av brukerens id og prosjekt-id, så andre kan ikke stoppe eller bruke den selv om de kjenner prosjekt-id-en. En kjøring lever høyst `SANDBOX_MAX_MINUTES` minutter (standard 120, aldri over 480) fra den ble startet. Når filer sendes til den, holdes den i live 10 minutter fra nå, men aldri forbi grensen, og gjentatte kall legger ikke på mer tid. Når grensen nås, stoppes kjøringen og brukeren får beskjed.
+
+## Import fra WordPress (uten AI)
+
+`POST /api/import/cms` (bare for innlogget bruker, med rate limit og på/av-bryteren `IMPORT_DISABLED`) leser et WordPress-nettsted inn i Pivolars innholdsmodell med vanlig kode. Eieren må bekrefte at nettstedet er hans eller hennes (`confirmOwner`).
+
+- `probe`: er det WordPress, kan innholdet leses gjennom REST-API-et (`/wp-json`, eller `?rest_route=`), og hvor mye finnes (sider, innlegg, bilder)?
+- `fetch`: henter sider, innlegg og bilder med tak: 150 sider og innlegg, 400 bilder, 100 sekunder totalt og 5 MB per JSON-svar. Resultatet er en `SiteModel` (`src/lib/import/model.ts`): sider med tittel, adresse, SEO-felt fra Yoast, og innholdet som typede blokker (overskrift, tekst med lenker, bilde, galleri, liste, sitat, knapp, kolonner, tabell, innbygging). Det som ikke kan gjøres om til en blokk (skjemaer, video, kortkoder) blir værende som `unknown`-blokker og står i advarslene.
+- `src/lib/import/safe-fetch.ts` er den eneste måten noe hentes på: adressen sjekkes før den åpnes, etter hver videresending, og når forbindelsen opprettes, og hvert svar har tidsgrense og størrelsesgrense (også etter utpakking). `robots.txt` følges, og sider den forbyr blir hoppet over.
+- `src/lib/import/clean.ts` renser HTML til blokker: ingen script, stil, hendelser eller `javascript:`-adresser kommer gjennom, bare lenker og enkel utheving i tekst.
+- `src/lib/import/skeleton.ts` lager det AI-en senere skal lese: strukturen og noen få ord per tekst. Selve teksten ligger i `slots` og går aldri gjennom modellen.
+
+Ikke på plass ennå: nedlasting av bildene til Supabase Storage, lagring av modellen i databasen, grensesnitt, og Joomla, Drupal, Wix og Squarespace.
