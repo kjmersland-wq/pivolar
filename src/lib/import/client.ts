@@ -1,5 +1,6 @@
 import { importProject } from "@/lib/projects";
 import { buildSiteProject, type SiteProject } from "./site-project";
+import type { Design } from "./design";
 import type { SiteModel } from "./model";
 
 /** Calls to the import route from the browser, and the step that turns a finished import into a project. */
@@ -23,6 +24,19 @@ async function call<T>(body: object): Promise<T> {
 export const probeSite = (url: string) => call<{ probe: Probe }>({ action: "probe", url, confirmOwner: true }).then((r) => r.probe);
 export const fetchSite = (url: string) => call<{ job: string; summary: Summary }>({ action: "fetch", url, confirmOwner: true });
 export const nextImages = (job: string) => call<Step>({ action: "images", job });
+
+/** Asks the AI for a design brief for a finished job. The server checks the limits and saves the brief with the job. */
+export async function designSite(job: string): Promise<Design> {
+  let response: Response;
+  try {
+    response = await fetch("/api/import/design", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job }) });
+  } catch {
+    throw new Error("Fikk ikke kontakt med serveren.");
+  }
+  const data = (await response.json().catch(() => ({}))) as { design?: Design; error?: string };
+  if (!response.ok || !data.design) throw new Error(data.error ?? (response.status === 429 ? "For mange forespørsler. Vent litt og prøv igjen." : "Fikk ikke noe forslag."));
+  return data.design;
+}
 
 /** Reads the finished job and saves it as a project in the browser, with the pictures pointing at storage. */
 export async function createProjectFromJob(job: string, url: string): Promise<{ ok: true; id: string; report: SiteProject["report"] } | { ok: false; error: string }> {

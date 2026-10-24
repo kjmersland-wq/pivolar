@@ -1,6 +1,6 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { convertToModelMessages, createUIMessageStreamResponse, generateImage, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
+import { chatModel } from "@/lib/ai-model";
 import { createAnalyzeTool, trimOldAnalyses } from "@/lib/analyze/tool";
 import { buildIndex, readFile, recentPaths, searchFiles, shouldIndex } from "@/lib/context";
 import { detectLoop, withNoteBeforeFinish, type LoopFinding, type StepLike } from "@/lib/guard/loop";
@@ -30,10 +30,7 @@ function friendlyError(error: unknown): string {
   return "Noe gikk galt hos AI-leverandøren. Prøv igjen om litt.";
 }
 
-// With ANTHROPIC_API_KEY the app talks to Claude directly; otherwise it goes through Vercel AI Gateway.
-const MODEL = process.env.ANTHROPIC_API_KEY
-  ? anthropic(process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5")
-  : (process.env.AI_GATEWAY_MODEL ?? "anthropic/claude-sonnet-5.5");
+const MODEL = chatModel;
 
 function filesSection(files: FileMap, recent: string[]): string {
   const visible = visibleFiles(files);

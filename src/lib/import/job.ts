@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyAssets, MEDIA_LIMITS, processBatch, type AssetRow, type FailReason, type Failure, type Stored } from "./media.ts";
+import type { Design } from "./design.ts";
 import type { SiteModel } from "./model.ts";
 import { createRobots, ImportFetchError, safeFetch } from "./safe-fetch.ts";
 
@@ -98,4 +99,12 @@ export async function loadModel(db: Db, userId: string, jobId: string) {
   const assets = rows.filter((r) => !r.failed && r.file).map((r) => ({ file: r.file!, path: `${userId}/${jobId}/${r.file}`, url: storage.getPublicUrl(`${userId}/${jobId}/${r.file}`).data.publicUrl, mime: r.mime, bytes: r.bytes, width: r.width, height: r.height }));
   const unique = [...new Map(assets.map((a) => [a.file, a])).values()];
   return { status: job.status as string, sourceUrl: job.source_url as string, model: applyAssets(job.model as SiteModel, rows), assets: unique };
+}
+
+/** Keeps the design brief with the job, so it is there when the project is made. Only the owner's own job can be changed (row-level security). */
+export async function saveDesign(db: Db, jobId: string, design: Design): Promise<boolean> {
+  const { data: job } = await db.from("import_jobs").select("model").eq("id", jobId).maybeSingle();
+  if (!job) return false;
+  const { error } = await db.from("import_jobs").update({ model: { ...(job.model as SiteModel), design } }).eq("id", jobId);
+  return !error;
 }

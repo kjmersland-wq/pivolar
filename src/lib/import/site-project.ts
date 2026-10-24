@@ -1,5 +1,6 @@
 import type { Block, Page, SiteModel } from "./model.ts";
 import { HEAD_MODULE } from "../publish/prerender.ts";
+import { FONT_PAIRS, sanitizeDesign, type Design } from "./design.ts";
 import { googleFamilies, isFontLink, resolveTokens, type Tokens } from "./theme.ts";
 
 /**
@@ -36,7 +37,7 @@ const TYPES = `export type Block =
 
 export type NavItem = { label: string; href: string };
 
-export type Site = { name: string; description: string; language: string | null; nav: NavItem[] };
+export type Site = { name: string; description: string; language: string | null; nav: NavItem[]; hero?: { headline: string; subline: string; cta?: { label: string; href: string } } };
 
 export type PageData = {
   id: string;
@@ -291,11 +292,18 @@ export function Seo({ title, description, image }: { title: string; description?
 }
 `;
 
-const LAYOUT = `import { useEffect, type ReactNode } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
-import { site } from "../content/site";
+const NAV_SIMPLE = `<nav aria-label="Hovedmeny" className="flex flex-wrap gap-x-5 gap-y-1 text-sm">`;
+const NAV_CENTERED = `<nav aria-label="Hovedmeny" className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-sm">`;
 
-/** The frame around every page: the name, the menu from the old site, and the footer. */
+/** The frame around every page: the name, the menu from the old site, and the footer. The header and footer come in two fixed variants. */
+function layoutFor(design: Design | null): string {
+  const centered = design?.header === "centered";
+  const columns = design?.footer === "columns";
+  const hero = Boolean(design?.hero);
+  return `import { useEffect, type ReactNode } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { site } from "../content/site";${hero ? '\nimport { Hero } from "./Hero";' : ""}
+
 export function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -307,11 +315,11 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="pv-page flex min-h-screen flex-col">
       <header className="border-b border-slate-200">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-5 py-4">
-          <Link to="/" className="text-lg font-semibold tracking-tight">
+        <div className="${centered ? "mx-auto flex max-w-5xl flex-col items-center gap-3 px-5 py-5 text-center" : "mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-5 py-4"}">
+          <Link to="/" className="${centered ? "text-2xl" : "text-lg"} font-semibold tracking-tight">
             {site.name}
           </Link>
-          <nav aria-label="Hovedmeny" className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+          ${centered ? NAV_CENTERED : NAV_SIMPLE}
             {site.nav.map((item) => (
               <NavLink key={item.href} to={item.href} end={item.href === "/"} className={({ isActive }) => (isActive ? "font-semibold" : "text-slate-600 hover:text-slate-900")}>
                 {item.label}
@@ -320,12 +328,56 @@ export function Layout({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10">{children}</main>
-      <footer className="border-t border-slate-200 py-6 text-center text-sm text-slate-500">
+${hero ? '      {pathname === "/" ? <Hero /> : null}\n' : ""}      <main className="pv-main mx-auto w-full max-w-3xl flex-1 px-5">{children}</main>
+${
+  columns
+    ? `      <footer className="border-t border-slate-200 py-10 text-sm text-slate-600">
+        <div className="mx-auto grid max-w-5xl gap-8 px-5 sm:grid-cols-2">
+          <div>
+            <p className="font-semibold">{site.name}</p>
+            {site.description ? <p className="mt-2">{site.description}</p> : null}
+          </div>
+          <nav aria-label="Bunnmeny" className="flex flex-col gap-1 sm:items-end">
+            {site.nav.map((item) => (
+              <Link key={item.href} to={item.href} className="hover:underline">
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </footer>`
+    : `      <footer className="border-t border-slate-200 py-6 text-center text-sm text-slate-500">
         {site.name}
         {site.description ? " · " + site.description : ""}
-      </footer>
+      </footer>`
+}
     </div>
+  );
+}
+`;
+}
+
+const HERO = `import { Link } from "react-router-dom";
+import { site } from "../content/site";
+
+/** A heading and a line at the top of the front page. It is a paragraph, not a heading, so the page keeps one main heading. */
+export function Hero() {
+  const hero = site.hero;
+  if (!hero) return null;
+  return (
+    <section className="pv-hero">
+      <div className="mx-auto max-w-3xl space-y-4 px-5 py-14">
+        <p className="pv-hero-title text-4xl font-semibold tracking-tight">{hero.headline}</p>
+        {hero.subline ? <p className="text-lg opacity-80">{hero.subline}</p> : null}
+        {hero.cta ? (
+          <p>
+            <Link to={hero.cta.href} className="pv-button inline-block px-5 py-2.5 text-sm font-medium">
+              {hero.cta.label}
+            </Link>
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 `;
@@ -444,14 +496,21 @@ export default function App() {
 `;
 
 /** The look of the old site as CSS variables, so the fixed layout carries its colours and fonts. */
-function stylesFor(tokens: Tokens, fontLinks: string[]): string {
+const RADIUS = { none: "0", soft: "0.5rem", round: "1rem" } as const;
+const PADDING = { regular: "2.5rem", airy: "4rem" } as const;
+
+function stylesFor(tokens: Tokens, fontLinks: string[], design: Design | null): string {
   return [
     ...fontLinks.map((href) => `@import url("${href}");`),
-    `:root { --pv-primary: ${tokens.primary}; --pv-on-primary: ${tokens.onPrimary}; --pv-bg: ${tokens.background}; --pv-text: ${tokens.text}; }`,
+    `:root { --pv-primary: ${tokens.primary}; --pv-on-primary: ${tokens.onPrimary}; --pv-bg: ${tokens.background}; --pv-text: ${tokens.text}; --pv-radius: ${RADIUS[design?.radius ?? "soft"]}; --pv-pad: ${PADDING[design?.density ?? "regular"]}; }`,
     "html, body, #root { margin: 0; min-height: 100%; }",
     `body { background: var(--pv-bg); color: var(--pv-text); font-family: ${tokens.bodyFont}; -webkit-font-smoothing: antialiased; }`,
     ...(tokens.headingFont ? [`h1, h2, h3, h4, h5, h6 { font-family: ${tokens.headingFont}; }`] : []),
     ".pv-page { background: var(--pv-bg); color: var(--pv-text); }",
+    ".pv-main { padding-block: var(--pv-pad); }",
+    ".pv-button, main img { border-radius: var(--pv-radius); }",
+    ".pv-hero { background: color-mix(in srgb, var(--pv-primary) 8%, var(--pv-bg)); }",
+    ".pv-hero-title { font-family: var(--pv-heading, inherit); }",
     "main a { color: var(--pv-primary); text-decoration: underline; text-underline-offset: 2px; }",
     ".pv-button, main a.pv-button { background: var(--pv-primary); color: var(--pv-on-primary); text-decoration: none; }",
     "a.pv-button:hover { filter: brightness(1.12); }",
@@ -564,21 +623,30 @@ export function buildSiteProject(model: SiteModel, imageUrl: (file: string) => s
   // The menu keeps the old order, on the new paths, and the front page comes first.
   const nav = model.nav.slice(0, NAV_DEPTH_LIMIT).map((item) => ({ label: item.label, href: localizeHref(item.href, origin) }));
   if (!nav.some((n) => n.href === "/")) nav.unshift({ label: "Forside", href: "/" });
-  const site = { name: model.name || "Nettsted", description: model.description, language: model.language, nav };
 
-  const tokens = resolveTokens(model.theme);
-  const fontLinks = (model.theme?.fontLinks ?? []).filter((l) => isFontLink(l) && googleFamilies([l]).length > 0).slice(0, 2);
+  // The brief is checked again here: it has been through storage and the browser since the server made it.
+  const design = sanitizeDesign(model.design, ["/", ...model.pages.map((p) => p.path)]);
+  let tokens = resolveTokens(model.theme);
+  let fontLinks = (model.theme?.fontLinks ?? []).filter((l) => isFontLink(l) && googleFamilies([l]).length > 0).slice(0, 2);
+  // The chosen font pair is used only when the old site had no fonts of its own to carry over.
+  if (design?.fonts && !model.theme?.bodyFont && !model.theme?.headingFont) {
+    const pair = FONT_PAIRS[design.fonts];
+    tokens = { ...tokens, bodyFont: pair.body, headingFont: pair.heading };
+    fontLinks = [pair.link];
+  }
+  const site = { name: model.name || "Nettsted", description: model.description, language: model.language, nav, ...(design?.hero ? { hero: design.hero } : {}) };
   const files: Files = {
     "/App.tsx": APP,
-    "/styles.css": stylesFor(tokens, fontLinks),
+    "/styles.css": stylesFor(tokens, fontLinks, design),
     "/lib/types.ts": TYPES,
     "/lib/inline.tsx": INLINE,
     "/lib/head.ts": HEAD_MODULE,
     "/components/Blocks.tsx": BLOCKS,
     "/components/Seo.tsx": SEO,
-    "/components/Layout.tsx": LAYOUT,
+    "/components/Layout.tsx": layoutFor(design),
     "/components/PageView.tsx": PAGE_VIEW,
     "/components/Home.tsx": HOME,
+    ...(design?.hero ? { "/components/Hero.tsx": HERO } : {}),
     "/components/SiteRoutes.tsx": ROUTES,
     "/content/site.ts": `import type { Site } from "../lib/types";\n\nexport const site: Site = ${JSON.stringify(site)};\n`,
     "/content/index.ts": [

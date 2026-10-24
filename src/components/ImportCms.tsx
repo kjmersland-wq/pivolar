@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Globe, Loader2, X } from "lucide-react";
-import { createProjectFromJob, fetchSite, nextImages, probeSite, type Probe, type Summary } from "@/lib/import/client";
+import { AlertTriangle, Globe, Loader2, Sparkles, X } from "lucide-react";
+import type { Design } from "@/lib/import/design";
+import { createProjectFromJob, designSite, fetchSite, nextImages, probeSite, type Probe, type Summary } from "@/lib/import/client";
 
-type Phase = "idle" | "probing" | "probed" | "fetching" | "images" | "ready" | "saving";
+type Phase = "idle" | "probing" | "probed" | "fetching" | "images" | "ready" | "designing" | "saving";
 
 /** Reads a WordPress site into a project: check the site, fetch the content and pictures, and open it. */
 export function ImportCms() {
@@ -19,8 +20,9 @@ export function ImportCms() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 });
   const [error, setError] = useState("");
+  const [design, setDesign] = useState<Design | null>(null);
   const job = useRef("");
-  const busy = phase === "probing" || phase === "fetching" || phase === "images" || phase === "saving";
+  const busy = phase === "probing" || phase === "fetching" || phase === "images" || phase === "designing" || phase === "saving";
 
   function close() {
     if (busy) return;
@@ -28,6 +30,7 @@ export function ImportCms() {
     setPhase("idle");
     setProbe(null);
     setSummary(null);
+    setDesign(null);
     setError("");
   }
 
@@ -63,6 +66,17 @@ export function ImportCms() {
       setError(e instanceof Error ? e.message : "Noe gikk galt.");
       setPhase(summary ? "ready" : "probed");
     }
+  }
+
+  async function suggestDesign() {
+    setError("");
+    setPhase("designing");
+    try {
+      setDesign(await designSite(job.current));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Noe gikk galt.");
+    }
+    setPhase("ready");
   }
 
   async function save() {
@@ -128,7 +142,7 @@ export function ImportCms() {
                   </div>
                 )}
 
-                {(phase === "fetching" || phase === "images" || phase === "ready" || phase === "saving") && (
+                {(phase === "fetching" || phase === "images" || phase === "ready" || phase === "designing" || phase === "saving") && (
                   <div className="space-y-2 text-[12.5px] text-muted">
                     <p className="flex items-center gap-2">
                       {phase === "fetching" ? <Loader2 className="size-3.5 animate-spin" /> : <span className="text-emerald-400">✓</span>} Henter sider og innlegg
@@ -141,7 +155,7 @@ export function ImportCms() {
                   </div>
                 )}
 
-                {summary && phase === "ready" && (
+                {summary && (phase === "ready" || phase === "designing") && (
                   <div className="space-y-2 rounded-xl border border-line bg-surface-2 p-3 text-[12.5px] text-muted">
                     <p>
                       <span className="text-fg">{summary.pages + summary.posts}</span> sider og innlegg, <span className="text-fg">{summary.media}</span> bilder.
@@ -156,10 +170,32 @@ export function ImportCms() {
                   </div>
                 )}
 
+                {(phase === "ready" || phase === "designing") && (
+                  <div className="space-y-2 rounded-xl border border-line bg-surface-2 p-3 text-[12.5px] text-muted">
+                    {design ? (
+                      <>
+                        <p className="text-fg">Designforslaget er lagret.</p>
+                        {design.hero && <p>Forsiden får overskriften «{design.hero.headline}».</p>}
+                        <p>
+                          Topp: {design.header === "centered" ? "midtstilt" : "enkel"}, bunn: {design.footer === "columns" ? "i kolonner" : "én linje"}, hjørner: {design.radius === "none" ? "skarpe" : design.radius === "round" ? "runde" : "myke"}, luft: {design.density === "airy" ? "romslig" : "vanlig"}.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>Valgfritt: la AI foreslå topp, bunn, hjørner og en overskrift til forsiden. Den leser bare en kort beskrivelse av nettstedet, ikke alle sidene, og endrer ingen tekster.</p>
+                        <button type="button" onClick={() => void suggestDesign()} disabled={phase === "designing"} className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-[13px] text-fg transition hover:border-line-strong disabled:opacity-60">
+                          {phase === "designing" ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                          Foreslå design med AI
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {error && <p className="text-[13px] text-red-400">{error}</p>}
 
-                {phase === "ready" || phase === "saving" ? (
-                  <button type="button" onClick={() => void save()} disabled={phase === "saving"} className="bg-brand flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[14px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-60">
+                {phase === "ready" || phase === "designing" || phase === "saving" ? (
+                  <button type="button" onClick={() => void save()} disabled={phase === "saving" || phase === "designing"} className="bg-brand flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[14px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-60">
                     {phase === "saving" && <Loader2 className="size-4 animate-spin" />}
                     Åpne som prosjekt
                   </button>

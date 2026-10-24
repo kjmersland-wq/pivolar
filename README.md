@@ -189,3 +189,13 @@ Importen leser hovedfargen, sidefargene og skrifttypene fra det gamle nettstedet
 - Den faste malen er laget for lyse sider. Hovedfargen mørknes til den kan leses som lenke (kontrast minst 4,5), tekstfargen må ha kontrast minst 7, og et mørkt nettsted beholder hovedfargen men får lys bakgrunn.
 - Google Fonts-adressene følger med som `@import`. Skrifttyper som lastes fra det gamle nettstedet selv kan ikke følge med, og står som advarsel.
 - Hovedfargen brukes også i `brand.json`, så delingsbildet og `theme-color` passer.
+
+### Designforslag fra AI (valgfritt)
+
+Alt i importen skjer med vanlig kode. AI brukes på ett sted, og bare hvis eieren trykker «Foreslå design med AI» i importvinduet (`/api/import/design`).
+
+- **Hva AI leser:** en kort beskrivelse (høyst 6 000 tegn): navn, beskrivelse, språk, hovedfarge og begynnelsen av noen få sider. Ikke sidene selv.
+- **Hva AI svarer med:** et lite forslag med faste valg: topp (enkel eller midtstilt), bunn (én linje eller kolonner), hjørner, luft, et skriftpar fra en fast liste og en overskrift med en linje tekst til forsiden, eventuelt med en knapp til en side som finnes. Ingen kode, ingen adresser, ingen stiler, ingen verktøy.
+- **Kontroll:** svaret kuttes ned til disse feltene (`sanitizeDesign`): ukjente valg blir standard, tekst mister `<`, `>` og kontrolltegn og kuttes i lengde, og en knapp utenfor siden fjernes. Det samme gjøres på nytt når prosjektet bygges. Beskrivelsen av nettstedet er merket som data i instruksjonen.
+- **Grenser:** den samme porten som chatten (innlogget, AI av/på, døgntak for tjenesten, brukerens budsjett med beløp satt av og gitt tilbake), egen kvote på 10 forslag i timen, høyst 1 200 tokens ut, 60 sekunder, og kostnaden telles i forbruket.
+- Skriftparet brukes bare når det gamle nettstedet ikke hadde egne skrifter som kunne følge med.

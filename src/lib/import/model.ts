@@ -1,3 +1,4 @@
+import type { Design } from "./design.ts";
 import type { Theme } from "./theme.ts";
 /**
  * What an import produces, whatever the website was built with. Content is cut into typed blocks
@@ -73,6 +74,8 @@ export type SiteModel = {
   nav: NavItem[];
   /** Colours and fonts read from the old site's own code. Missing on imports made before this was read. */
   theme?: Theme;
+  /** The design brief, when the owner asked for one. Chosen from fixed options. */
+  design?: Design;
   pages: Page[];
   media: Media[];
   /** Plugins and builders found anywhere, with the number of pages each was seen on. */

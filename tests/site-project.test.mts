@@ -88,9 +88,9 @@ const files = project.files;
 }
 
 // --- the generated code is valid TypeScript, with the real types of React and the router
-{
+const typeErrors = (projectFiles: Record<string, string>) => {
   const dir = join(root, ".gen-site").replace(/\\/g, "/");
-  const virtual = new Map(Object.entries(files).map(([path, code]) => [`${dir}${path}`, code]));
+  const virtual = new Map(Object.entries(projectFiles).map(([path, code]) => [`${dir}${path}`, code]));
   const options: ts.CompilerOptions = { jsx: ts.JsxEmit.ReactJSX, strict: true, noEmit: true, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, target: ts.ScriptTarget.ES2022, lib: ["lib.es2022.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"], skipLibCheck: true, types: [], isolatedModules: true, noUnusedLocals: false, exactOptionalPropertyTypes: true, noUncheckedIndexedAccess: true };
   const host = ts.createCompilerHost(options);
   const norm = (f: string) => f.replace(/\\/g, "/");
@@ -102,9 +102,9 @@ const files = project.files;
   host.directoryExists = (d) => (norm(d).startsWith(dir) ? [...virtual.keys()].some((k) => k.startsWith(norm(d).replace(/\/$/, "") + "/")) : (baseDirectoryExists?.(d) ?? false));
   host.getSourceFile = (f, language, onError, shouldCreate) => (virtual.has(norm(f)) ? ts.createSourceFile(f, virtual.get(norm(f))!, language) : base.getSourceFile(f, language, onError, shouldCreate));
   const program = ts.createProgram([...virtual.keys()], options, host);
-  const errors = ts.getPreEmitDiagnostics(program).filter((d) => d.file && virtual.has(norm(d.file.fileName))).map((d) => `${norm(d.file!.fileName).replace(dir, "")}:${d.file!.getLineAndCharacterOfPosition(d.start ?? 0).line + 1} ${ts.flattenDiagnosticMessageText(d.messageText, "\n")}`);
-  assert.deepEqual(errors, [], "no type errors in the generated project");
-}
+  return ts.getPreEmitDiagnostics(program).filter((d) => d.file && virtual.has(norm(d.file.fileName))).map((d) => `${norm(d.file!.fileName).replace(dir, "")}:${d.file!.getLineAndCharacterOfPosition(d.start ?? 0).line + 1} ${ts.flattenDiagnosticMessageText(d.messageText, "\n")}`);
+};
+assert.deepEqual(typeErrors(files), [], "no type errors in the generated project");
 
 // --- the site really renders: every page on its old path, with the right content
 const out = join(root, "node_modules", ".cache", "pivolar-site-test");
@@ -200,6 +200,28 @@ const render = (location: string) => renderToString(React.createElement(StaticRo
   assert.equal(JSON.parse(tampered.files["/brand.json"]!).primary, "#0f172a");
   // Without a theme (an older import) the plain look is used
   assert.match(files["/styles.css"]!, /--pv-primary: #0f172a;/);
+}
+
+{
+  // The AI's design brief: fixed variants of the header, the footer and the front page, all valid code
+  const design = { radius: "round", density: "airy", header: "centered", footer: "columns", fonts: "editorial", hero: { headline: "Kaffe brent lokalt", subline: "Siden 1990.", cta: { label: "Les mer", href: "/om-oss" } } } as const;
+  const designed = buildSiteProject({ ...model, design }, url);
+  assert.deepEqual(typeErrors(designed.files), [], "no type errors with the design applied");
+  const layout = designed.files["/components/Layout.tsx"]!;
+  assert.match(layout, /flex-col items-center/, "centered header");
+  assert.match(layout, /sm:grid-cols-2/, "footer in columns");
+  assert.match(layout, /pathname === "\/" \? <Hero \/> : null/);
+  assert.ok("/components/Hero.tsx" in designed.files && JSON.parse(designed.files["/content/site.ts"]!.match(/= (\{.*\});/)![1]!).hero.cta.href === "/om-oss");
+  assert.match(designed.files["/styles.css"]!, /--pv-radius: 1rem; --pv-pad: 4rem;/);
+  assert.match(designed.files["/styles.css"]!, /Fraunces/, "the chosen fonts, since the old site had none of its own");
+  // The old site's own fonts win over the chosen pair
+  const own = buildSiteProject({ ...model, design, theme: { fontLinks: [], bodyFont: "Lora, serif" } }, url);
+  assert.doesNotMatch(own.files["/styles.css"]!, /Fraunces/);
+  // The plain project has no hero and the simple frame
+  assert.ok(!("/components/Hero.tsx" in files) && !/Hero/.test(files["/components/Layout.tsx"]!));
+  // A brief that was tampered with in storage is cut down again, so nothing but fixed variants reaches the code
+  const tampered = buildSiteProject({ ...model, design: { radius: "x}", header: "<script>", hero: { headline: "<img onerror=1>Hei", subline: "", cta: { label: "Gå", href: "https://evil.example" } }, css: "body{display:none}" } as never }, url);
+  assert.doesNotMatch(["/styles.css", "/components/Layout.tsx", "/content/site.ts", "/brand.json"].map((f) => tampered.files[f] ?? "").join(" "), /evil\.example|<img onerror|display:none/);
 }
 
 // --- what Pivolar's own checks say about the result
