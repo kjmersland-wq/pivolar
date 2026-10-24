@@ -119,3 +119,17 @@ Alt som koster penger kontrolleres på serveren før arbeidet starter. Sjekkene 
 | `QUOTA_ALLOW_UNSET` | av | `1` slipper forespørsler gjennom mens databasefunksjonene mangler. Bare mellom en deploy og dens migrasjon. |
 
 **Oppsett:** kjør `supabase/migrations/20261024160000_pivolar_quota.sql` i Supabase **før** du deployer. Migrasjonen bare legger til, og gamle versjoner av appen virker som før. Mangler funksjonene, avviser serveren AI-forespørsler med beskjed om å kjøre den (det er med vilje: «usikker» skal aldri bety «gratis»).
+
+## Stack og hosting
+
+Pivolar leser et prosjekt og setter det i en av tre grupper med faste regler, uten AI (`src/lib/stack/classify.ts`): **Statisk** (bare filer), **Avansert frontend** (React, Next.js og lignende, bygget til filer eller rendret på serveren) og **Fullstack** (en server som må gå hele tiden, eget Docker-oppsett eller egen database). Hver gruppe har med seg en grunn i klartekst.
+
+Gruppen går inn i en fast tabell (`src/lib/hosting/rules.ts`) som sier hvilken vert som passer best, med pris fra tallene i `src/lib/hosting/catalog.ts` (hver pris har dato og kilde, og må oppdateres for hånd):
+
+| Gruppe | Første valg |
+|---|---|
+| Statisk, frontend som filer | Cloudflare (gratis), så Netlify, GitHub Pages og Vercel |
+| Frontend med serverrendering | Vercel |
+| Fullstack | Hetzner (ca. 6 EUR), så Render og Railway |
+
+Importrapporten viser gruppen og anbefalt vert. Knappen **Hosting** i et prosjekt viser rangeringen og lar deg legge oppsettsfilene i prosjektet (filer som finnes fra før blir ikke overskrevet). For en server lages `Dockerfile` for språket (Node, Python eller PHP), `docker-compose.yml` med databasen prosjektet trenger, `.dockerignore`, en workflow som ber Coolify bygge på nytt, og `HOSTING.md` med stegene for Coolify og Dokku. Startkommandoen er gjettet ut fra rammeverket, så sjekk den.

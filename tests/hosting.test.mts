@@ -8,7 +8,7 @@ const app = (extra: Record<string, string> = {}) => ({ "/App.tsx": "export defau
 
 // --- the catalog
 {
-  assert.deepEqual(HOST_IDS, ["vercel", "cloudflare", "netlify", "github-pages", "render", "hetzner"]);
+  assert.deepEqual(HOST_IDS, ["vercel", "cloudflare", "netlify", "github-pages", "render", "railway", "hetzner"]);
   assert.equal(new Set(HOST_IDS).size, HOSTS.length);
   for (const h of HOSTS) {
     assert.match(h.source, /^https:\/\//, `${h.id} has a source`);
@@ -24,7 +24,8 @@ const app = (extra: Record<string, string> = {}) => ({ "/App.tsx": "export defau
 
 // --- what a site needs
 {
-  assert.deepEqual(profileOf(app()), { functions: false, commercial: false });
+  const plain = profileOf(app());
+  assert.deepEqual({ functions: plain.functions, commercial: plain.commercial, stack: plain.stack, delivery: plain.delivery }, { functions: false, commercial: false, stack: "frontend", delivery: "files" });
   assert.equal(profileOf(app({ "/api/subscribe.ts": "x" })).functions, true);
   assert.equal(profileOf(app({ "/components/Buy.tsx": 'const url = "https://buy.stripe.com/abc";' })).commercial, true);
   assert.equal(profileOf(app({ "/components/Pricing.tsx": "Priser fra 99 kr. Meld deg på nyhetsbrevet." })).commercial, false, "a price list is not a shop");
@@ -35,11 +36,11 @@ const app = (extra: Record<string, string> = {}) => ({ "/App.tsx": "export defau
 {
   const fits = (profile: Parameters<typeof advise>[0]) => Object.fromEntries(advise(profile).map((a) => [a.host.id, a.fit]));
   const staticSite = fits({ functions: false, commercial: false });
-  assert.deepEqual(staticSite, { vercel: "ok", cloudflare: "best", netlify: "ok", "github-pages": "ok", render: "overkill", hetzner: "overkill" });
+  assert.deepEqual(staticSite, { vercel: "ok", cloudflare: "best", netlify: "ok", "github-pages": "ok", render: "overkill", railway: "overkill", hetzner: "overkill" });
   assert.equal(advise({ functions: false, commercial: false })[0]!.host.id, "cloudflare");
   const withFunctions = fits({ functions: true, commercial: false });
   assert.equal(withFunctions.vercel, "best");
-  for (const id of ["cloudflare", "netlify", "github-pages", "render", "hetzner"]) assert.equal(withFunctions[id], "no", `${id} cannot run the functions`);
+  for (const id of ["cloudflare", "netlify", "github-pages", "render", "railway", "hetzner"]) assert.equal(withFunctions[id], "no", `${id} cannot run the functions`);
   const shop = fits({ functions: false, commercial: true });
   assert.equal(shop["github-pages"], "no", "free GitHub hosting forbids shops");
   assert.equal(shop.cloudflare, "best");

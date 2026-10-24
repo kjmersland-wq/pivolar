@@ -74,6 +74,14 @@ export function ImportReport({ result, label, defaultName, info, note, onClose }
 
             <div className="mt-5 space-y-4">
               <p className="rounded-xl border border-line bg-surface/60 p-3 text-[13px] leading-relaxed text-muted">{report.previewNote}</p>
+              <Section title="Hva slags prosjekt">
+                <p className="text-[12.5px] text-muted">
+                  <span className="text-fg">{report.stack.label}</span> ({report.stack.reasons.join(", ")}).
+                </p>
+                <p className="mt-1 text-[12.5px] text-muted">
+                  Anbefalt vert: <span className="text-fg">{report.stack.host.name}</span>, {report.stack.host.cost}. {report.stack.host.why}
+                </p>
+              </Section>
               {report.packageManager && <Section title="Pakkebehandler">{<p className="text-[12.5px] text-muted">{report.packageManager}</p>}</Section>}
               {Object.keys(report.scripts).length > 0 && <Section title="Skript">{<List items={Object.entries(report.scripts).map(([k, v]) => `${k}: ${v}`)} />}</Section>}
               {report.services.length > 0 && <Section title="Eksterne tjenester">{<List items={report.services} />}</Section>}

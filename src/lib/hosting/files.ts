@@ -1,4 +1,6 @@
+import type { Classification } from "../stack/classify.ts";
 import type { HostId } from "./catalog.ts";
+import { serverFiles, type Target } from "./server-files.ts";
 
 /**
  * The files a host needs next to the site, written into the published repository. Every host gets
@@ -117,7 +119,14 @@ const HOSTING_MD = `# Legge siden på din egen server (Hetzner eller lignende)
 Serveren har ingen database og ingen serverfunksjoner. Den serverer bare filene i dist. Husk sikkerhetskopier og at serveren må oppdateres jevnlig (\`apt update && apt upgrade\`).
 `;
 
-export function hostFiles(host: HostId, name: string): Record<string, string> {
+/** What the settings files are made from: the project's files and what the stack classification found. Without it a site of only files is assumed. */
+export type ProjectInfo = { files: Record<string, string>; classification: Classification };
+
+const SERVER_HOSTS = new Set<HostId>(["hetzner", "render", "railway"]);
+
+export function hostFiles(host: HostId, name: string, project?: ProjectInfo): Record<string, string> {
+  // A project with a server of its own gets a Dockerfile for its language instead of the files-only setup.
+  if (project && SERVER_HOSTS.has(host) && project.classification.delivery !== "files") return serverFiles(host as Target, name, project.files, project.classification);
   switch (host) {
     case "netlify":
       return { "netlify.toml": NETLIFY };
@@ -150,4 +159,10 @@ export function deployLink(host: HostId, repoUrl: string): string | null {
     default:
       return null;
   }
+}
+
+/** The settings files for a host that the project does not already have, so nothing the owner wrote is replaced. */
+export function missingHostFiles(host: HostId, name: string, project: ProjectInfo): Record<string, string> {
+  const wanted = hostFiles(host, name, project);
+  return Object.fromEntries(Object.entries(wanted).filter(([path]) => !(`/${path}` in project.files)));
 }

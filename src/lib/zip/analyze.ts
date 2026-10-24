@@ -3,7 +3,12 @@
 
 export type FileMap = Record<string, string>;
 
+import { estimateCost, rank } from "../hosting/rules.ts";
+import { classifyStack, STACK_LABELS, type Delivery, type Stack } from "../stack/classify.ts";
+
 export type Report = {
+  /** The three groups (static, front-end, full stack) and the cheapest host that fits, from fixed rules. */
+  stack: { category: Stack; delivery: Delivery; label: string; reasons: string[]; host: { id: string; name: string; cost: string; why: string } };
   framework: { id: string; label: string };
   packageManager: string | null;
   scripts: Record<string, string>;
@@ -96,7 +101,19 @@ export function analyze(files: FileMap): Report {
   const pivolarNative = has("/App.tsx") && !pkg;
   const runnable = Boolean(pkg && scriptsRaw.dev && ["nextjs", "tanstack-start", "astro", "remix", "nuxt", "sveltekit", "vite-vue", "vite", "node-server", "node"].includes(framework.id));
   const viteReact = framework.id === "vite-react" && (has("/src/App.tsx") || has("/src/App.jsx"));
+
+  // What kind of project it is and where it is cheapest to run: fixed rules, no AI.
+  const classification = classifyStack(files);
+  const profile = { functions: classification.functions, commercial: false, stack: classification.stack, delivery: classification.delivery };
+  const best = rank(profile)[0]!;
   return {
+    stack: {
+      category: classification.stack,
+      delivery: classification.delivery,
+      label: STACK_LABELS[classification.stack],
+      reasons: classification.reasons,
+      host: { id: best.host.id, name: best.host.name, cost: estimateCost(best.host, profile).label, why: best.why },
+    },
     framework,
     packageManager,
     scripts,

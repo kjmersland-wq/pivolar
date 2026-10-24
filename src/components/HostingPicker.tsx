@@ -5,6 +5,8 @@ import { ExternalLink } from "lucide-react";
 import type { FileMap } from "@/lib/files";
 import type { HostId } from "@/lib/hosting/catalog";
 import { advise, profileOf, type Fit } from "@/lib/hosting/recommend";
+import { estimateCost } from "@/lib/hosting/rules";
+import { STACK_LABELS } from "@/lib/stack/classify";
 import { cn } from "@/lib/utils";
 
 const FIT: Record<Fit, { label: string; tone: string }> = {
@@ -16,10 +18,15 @@ const FIT: Record<Fit, { label: string; tone: string }> = {
 
 /** Where the site can go, ranked for what it contains, with what it costs and why. */
 export function HostingPicker({ files, value, onChange, disabled }: { files: FileMap; value: HostId; onChange: (host: HostId) => void; disabled: boolean }) {
-  const advice = useMemo(() => advise(profileOf(files)), [files]);
+  const profile = useMemo(() => profileOf(files), [files]);
+  const advice = useMemo(() => advise(profile), [profile]);
+  const { classification } = profile;
   return (
     <fieldset className="space-y-2" disabled={disabled}>
       <legend className="text-[12.5px] font-medium text-muted">Hvor skal siden ligge?</legend>
+      <p className="rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] text-muted">
+        Dette ser ut som: <span className="text-fg">{STACK_LABELS[classification.stack]}</span> ({classification.reasons.join(", ")}).
+      </p>
       {advice.map(({ host, fit, why }) => {
         const selected = value === host.id;
         return (
@@ -30,6 +37,7 @@ export function HostingPicker({ files, value, onChange, disabled }: { files: Fil
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[13.5px] font-medium">{host.name}</span>
                   <span className={cn("rounded-md px-1.5 py-0.5 text-[11px]", FIT[fit].tone)}>{FIT[fit].label}</span>
+                  {fit !== "no" && <span className="text-[11.5px] text-faint">{estimateCost(host, profile).label}</span>}
                 </div>
                 <p className="mt-0.5 text-[12.5px] text-muted">{why}</p>
                 {selected && (
