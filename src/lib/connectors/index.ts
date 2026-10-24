@@ -1,3 +1,4 @@
+import { BACKEND } from "./backend.ts";
 import { CATALOG } from "./catalog.ts";
 import { READY, SUBSCRIBE_FUNCTION } from "./ready.ts";
 import type { Category, Connector } from "./types.ts";
@@ -12,10 +13,10 @@ export { SUBSCRIBE_FUNCTION };
  * environment variables.
  */
 
-export const CONNECTORS: Connector[] = [...READY, ...CATALOG];
+export const CONNECTORS: Connector[] = [...READY, ...BACKEND, ...CATALOG];
 
 /** Categories in the order they are shown. */
-export const CATEGORIES: Category[] = ["ecommerce", "marketing", "messaging", "productivity", "sales", "google", "microsoft", "security", "aws"];
+export const CATEGORIES: Category[] = ["backend", "ecommerce", "marketing", "messaging", "productivity", "sales", "google", "microsoft", "security", "aws"];
 
 /** The only environment variables a published site may receive, so nothing else can be sent along. */
 export const ENV_NAMES: string[] = [...new Set(CONNECTORS.flatMap((c) => c.fields.flatMap((f) => (f.env ? [f.env] : []))))];
@@ -62,6 +63,8 @@ export function validate(connector: Connector, values: Record<string, string>): 
   for (const field of connector.fields) {
     const value = clean(values[field.key]);
     if (value && field.pattern && !field.pattern.test(value)) return field.error ?? `${field.label} ser ikke riktig ut.`;
+    const problem = value && field.check ? field.check(value) : null;
+    if (problem) return problem;
   }
   return null;
 }

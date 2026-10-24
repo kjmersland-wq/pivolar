@@ -299,7 +299,7 @@ export function buildDeployableProject(files: FileMap, title: string, options: {
     const relative = path.replace(/^\/+/, "");
     if (relative === "styles.css") continue;
     // Files under /public are served as they are (favicon, logo) and files under /api run as server functions on Vercel; everything else is source code.
-    out[relative.startsWith("public/") || relative.startsWith("api/") ? relative : `src/${relative}`] = code;
+    out[relative.startsWith("public/") || relative.startsWith("api/") || relative.startsWith("supabase/") ? relative : `src/${relative}`] = code;
   }
   if (prerender) {
     out["src/entry-server.tsx"] = ENTRY_SERVER;

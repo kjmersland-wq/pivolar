@@ -215,3 +215,18 @@ Finnes det ingen åpen API (eller WordPress har stengt den), leser importen side
 - **Adresser:** bare vanlige sider på samme nettsted. Filer, admin- og innloggingsområder og adresser med tegn som ruteren ville lest som mønster (`:`, `*`, `(`) hoppes over.
 - **Egen kvote:** 5 slike lesinger i timen (`render`), i tillegg til importkvoten.
 - **Grenser:** Skjemaer, søk, handlekurv og alt bak innlogging følger ikke med. Det står i importnotatet. Alt som ikke er en vanlig side (for eksempel innhold som bare lastes ved klikk) må legges til for hånd.
+
+## Innlogging og database for appene (Supabase)
+
+Koblingen «Innlogging og database (Supabase)» gir en app konto, innlogging og tabeller der hver bruker bare ser sine egne rader. Eieren skriver tabellene i noen få linjer, og vanlig kode lager SQL-en og filene, uten AI:
+
+```
+oppgaver: tittel text!, ferdig ja/nei, frist dato
+produkter [offentlig]: navn text!, pris tall
+```
+
+- **SQL (`supabase/schema.sql`):** hver tabell får `id`, `owner_id` (satt av databasen til den innloggede brukeren), `created_at`, radnivå-sikkerhet og fire regler (se, legg til, endre, slett egne rader). En rad kan ikke gis til en annen. `[offentlig]` gir i tillegg en lesing for alle, aldri skriving. Kjøres SQL-en på nytt, beholdes dataene, og regler som ikke lenger gjelder fjernes. Eieren kjører den selv i SQL Editor.
+- **Navn:** bare små bokstaver, tall og understrek (æ, ø og å blir ae, o og a). Ord databasen har opptatt og `id`, `owner_id` og `created_at` avvises, og ingenting annet enn slike navn kommer inn i SQL-en (testet med 2 000 tilfeldige tekster).
+- **Filene i appen:** `/lib/supabase.ts` (klienten), `/lib/useTable.ts` (les og skriv en tabell, med feilmeldinger på norsk), `/lib/db-types.ts` (radtyper) og `/components/AuthGate.tsx` (innlogging, ny konto, utlogging). Faste filer som er typesjekket mot de ekte typene til React og Supabase. AI-en bygger bare skjermbildene på toppen og blir bedt om å la dem være.
+- **Nøkler:** bare adressen og den offentlige nøkkelen (anon eller publishable) kommer inn i koden, slik Supabase er laget for. Den hemmelige nøkkelen (`service_role` / `sb_secret_`) avvises, også når den er pakket inn som JWT.
+- **Etterpå:** kjør SQL-en, slå på e-postinnlogging og legg til sidens adresse under Authentication → URL Configuration. Publisering legger SQL-en i `supabase/` i prosjektet, ikke under `src/`.

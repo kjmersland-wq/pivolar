@@ -10,13 +10,17 @@ export type Field = {
   env?: string;
   help?: string;
   optional?: boolean;
+  /** Several lines instead of one. */
+  multiline?: boolean;
+  /** A check that is more than a pattern. Returns what is wrong, or null. */
+  check?: (value: string) => string | null;
   /** What a valid value looks like, so a typo is caught before it lands in the code. */
   pattern?: RegExp;
   error?: string;
 };
 
 /** The groups used in the connector list, in the order they are shown. */
-export type Category = "ecommerce" | "marketing" | "messaging" | "productivity" | "sales" | "security" | "google" | "microsoft" | "aws";
+export type Category = "ecommerce" | "marketing" | "messaging" | "productivity" | "sales" | "security" | "google" | "microsoft" | "aws" | "backend";
 
 /**
  * ready: Pivolar writes the server code itself and it is covered by tests.
@@ -46,6 +50,7 @@ export type Connector = {
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {
+  backend: "Backend og database",
   ecommerce: "Nettbutikk og betaling",
   marketing: "Markedsføring",
   messaging: "Meldinger og e-post",

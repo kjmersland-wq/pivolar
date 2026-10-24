@@ -110,6 +110,7 @@ export const SANDBOX_DEPENDENCIES: Record<string, string> = {
   recharts: "2.15.0",
   "react-router-dom": "6.28.0",
   "date-fns": "4.1.0",
+  "@supabase/supabase-js": "2.45.4",
 };
 
 export const TAILWIND_CDN = "https://cdn.tailwindcss.com";

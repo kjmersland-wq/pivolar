@@ -162,15 +162,26 @@ export function ConnectorsDialog({
                   <label key={field.key} className="block text-[12.5px] text-muted">
                     {field.label}
                     {field.optional ? " (valgfritt)" : ""}
-                    <input
-                      value={values[field.key] ?? ""}
-                      onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
-                      placeholder={field.placeholder}
-                      type={field.secret ? "password" : "text"}
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="mt-1 w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-[14px] text-fg outline-none transition focus:border-line-strong"
-                    />
+                    {field.multiline ? (
+                      <textarea
+                        value={values[field.key] ?? ""}
+                        onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+                        placeholder={field.placeholder}
+                        rows={5}
+                        spellCheck={false}
+                        className="mt-1 w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 font-mono text-[13px] text-fg outline-none transition focus:border-line-strong"
+                      />
+                    ) : (
+                      <input
+                        value={values[field.key] ?? ""}
+                        onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+                        placeholder={field.placeholder}
+                        type={field.secret ? "password" : "text"}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="mt-1 w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-[14px] text-fg outline-none transition focus:border-line-strong"
+                      />
+                    )}
                     {field.help && <span className="mt-1 block text-faint">{field.help}</span>}
                   </label>
                 ))}
