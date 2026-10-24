@@ -100,15 +100,25 @@ export function readableOn(hex: string): "#ffffff" | "#111111" {
 
 export const escapeAttr = (value: string) => value.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
+/** Schema.org data for search engines. `<` is escaped so the text can never close the script tag. */
+export function structuredData(brand: Brand, title: string): string {
+  const json = JSON.stringify({ "@context": "https://schema.org", "@type": "WebSite", name: brand.name || title, description: brand.description, url: "__SITE_URL__/", inLanguage: "nb" }).replace(/</g, "\\u003c");
+  return `<script type="application/ld+json">${json}</script>`;
+}
+
 /** Meta tags for index.html. The share image address is made absolute at build time (see siteUrl in the Vite config). */
 export function metaTags(brand: Brand, title: string): string {
   const name = escapeAttr(brand.name || title);
   const description = escapeAttr(brand.description);
   return [
     `<meta name="description" content="${description}" />`,
+    `<link rel="canonical" href="__SITE_URL__/" />`,
     `<meta name="theme-color" content="${brand.primary}" />`,
     brand.hasFavicon ? `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />` : "",
     `<meta property="og:type" content="website" />`,
+    `<meta property="og:site_name" content="${name}" />`,
+    `<meta property="og:locale" content="nb_NO" />`,
+    `<meta property="og:url" content="__SITE_URL__/" />`,
     `<meta property="og:title" content="${name}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:image" content="__SITE_URL__/og.png" />`,
@@ -118,6 +128,7 @@ export function metaTags(brand: Brand, title: string): string {
     `<meta name="twitter:title" content="${name}" />`,
     `<meta name="twitter:description" content="${description}" />`,
     `<meta name="twitter:image" content="__SITE_URL__/og.png" />`,
+    structuredData(brand, title),
   ]
     .filter(Boolean)
     .join("\n    ");

@@ -53,10 +53,15 @@ import tailwindcss from "@tailwindcss/vite";
 
 // The share image needs an absolute address. Vercel exposes the production domain while building.
 function siteUrl() {
+  const base = process.env.VERCEL_PROJECT_PRODUCTION_URL ? "https://" + process.env.VERCEL_PROJECT_PRODUCTION_URL : "";
   return {
     name: "site-url",
-    transformIndexHtml: (html: string) =>
-      html.replaceAll("__SITE_URL__", process.env.VERCEL_PROJECT_PRODUCTION_URL ? "https://" + process.env.VERCEL_PROJECT_PRODUCTION_URL : ""),
+    transformIndexHtml: (html: string) => html.replaceAll("__SITE_URL__", base),
+    // Search engines need the absolute address, so robots.txt and the sitemap are written at build time.
+    generateBundle(this: { emitFile: (file: { type: "asset"; fileName: string; source: string }) => void }) {
+      this.emitFile({ type: "asset", fileName: "robots.txt", source: "User-agent: *\\nAllow: /\\n" + (base ? "\\nSitemap: " + base + "/sitemap.xml\\n" : "") });
+      if (base) this.emitFile({ type: "asset", fileName: "sitemap.xml", source: '<?xml version="1.0" encoding="UTF-8"?>\\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\\n  <url><loc>' + base + "/</loc></url>\\n</urlset>\\n" });
+    },
   };
 }
 
