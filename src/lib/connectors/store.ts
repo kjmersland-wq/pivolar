@@ -12,6 +12,16 @@ export function loadConnectors(projectId: string): Saved {
   }
 }
 
+export function removeConnector(projectId: string, id: string): void {
+  try {
+    const rest = loadConnectors(projectId);
+    delete rest[id];
+    window.localStorage.setItem(KEY(projectId), JSON.stringify(rest));
+  } catch {
+    /* storage blocked: nothing to remove */
+  }
+}
+
 export function saveConnector(projectId: string, id: string, values: Record<string, string>): void {
   try {
     window.localStorage.setItem(KEY(projectId), JSON.stringify({ ...loadConnectors(projectId), [id]: values }));

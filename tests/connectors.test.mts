@@ -3,7 +3,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { CONNECTORS, connectorById, envFor, missingFields, pickEnv, publicValues, SUBSCRIBE_FUNCTION, validate } from "../src/lib/connectors/index.ts";
+import { CATEGORIES, CONNECTORS, connectorById, ENV_NAMES, envFor, missingFields, pickEnv, publicValues, searchConnectors, SUBSCRIBE_FUNCTION, validate } from "../src/lib/connectors/index.ts";
+import { metaTags, readBrand } from "../src/lib/publish/brand.ts";
 import { buildDeployableProject } from "../src/lib/publish/project.ts";
 
 const paddle = connectorById("paddle")!;
@@ -13,8 +14,73 @@ const goodPaddle = { token: "test_0123456789abcdef", priceId: "pri_01abcdefghij"
 const goodResend = { apiKey: "re_abcdefghijklmnop", audienceId: "78261eea-8f8b-4381-83c6-79fa7120f1cf" };
 
 // --- registry
-assert.deepEqual(CONNECTORS.map((c) => c.id), ["paddle", "stripe", "resend"]);
-assert.equal(new Set(CONNECTORS.map((c) => c.id)).size, CONNECTORS.length);
+assert.deepEqual(CONNECTORS.slice(0, 3).map((c) => c.id), ["paddle", "stripe", "resend"]);
+assert.equal(new Set(CONNECTORS.map((c) => c.id)).size, CONNECTORS.length, "ids are unique");
+for (const c of CONNECTORS) {
+  assert.ok(CATEGORIES.includes(c.category), `${c.id} has a known category`);
+  if (c.kind === "soon") assert.equal(c.fields.length, 0, `${c.id} is only listed`);
+  else {
+    assert.ok(c.fields.length > 0 && c.docs.startsWith("https://"), `${c.id} has fields and docs`);
+    assert.ok(c.request(Object.fromEntries(c.fields.map((f) => [f.key, "x"]))).length > 40, `${c.id} has a request`);
+  }
+  for (const f of c.fields) {
+    if (f.env) assert.match(f.env, /^[A-Z][A-Z0-9_]+$/, `${c.id}/${f.key} env name`);
+    if (f.secret) assert.ok(f.env, `${c.id}/${f.key} is secret, so it must reach the site as an env var`);
+  }
+  // Nothing a connector asks the model to build may contain a secret: the prompt sees public values only.
+  const secrets = Object.fromEntries(c.fields.filter((f) => f.secret).map((f) => [f.key, `SECRET-${f.key}-VALUE`]));
+  assert.doesNotMatch(c.request(publicValues(c, secrets)), /SECRET-/, `${c.id} prompt has no secrets`);
+}
+assert.ok(ENV_NAMES.includes("RESEND_API_KEY") && ENV_NAMES.includes("BREVO_API_KEY") && ENV_NAMES.includes("TELEGRAM_BOT_TOKEN"));
+assert.ok(!ENV_NAMES.includes("GITHUB_TOKEN") && !ENV_NAMES.includes("VERCEL_TOKEN"), "Pivolar's own keys can never be passed on");
+assert.equal(new Set(ENV_NAMES).size, ENV_NAMES.length);
+
+// --- search
+assert.deepEqual(searchConnectors("paddle").map((c) => c.id), ["paddle"]);
+assert.ok(searchConnectors("sms").map((c) => c.id).includes("twilio"));
+assert.ok(searchConnectors("sms").map((c) => c.id).includes("gatewayapi"));
+assert.equal(searchConnectors("").length, CONNECTORS.length);
+assert.deepEqual(searchConnectors("finnes ikke xyz"), []);
+
+// --- assisted connectors: the prompt names the env vars and the function file, never a value
+{
+  const slack = connectorById("slack")!;
+  assert.equal(slack.kind, "assisted");
+  const text = slack.request({});
+  assert.match(text, /\/api\/slack\.ts/);
+  assert.match(text, /SLACK_WEBHOOK_URL/);
+  assert.match(text, /process\.env/);
+  assert.equal(validate(slack, { url: "https://hooks.slack.com/services/T0/B0/abc" }), null);
+  assert.match(validate(slack, { url: "https://evil.example/hooks.slack.com/services/x" })!, /hooks\.slack\.com/);
+  assert.equal(validate(connectorById("telegram")!, { token: "123456789:AAH-abcdefghijklmnopqrstuvwxyz12345", chat: "-100123456" }), null);
+  assert.match(validate(connectorById("twilio")!, { sid: "AC123", token: "x", from: "12345" })!, /Account SID/);
+  assert.deepEqual(envFor({ mailgun: { apiKey: "key-abcdefghijklmnopqrst", domain: "mg.eksempel.no", to: "a@b.no" } }), { MAILGUN_API_KEY: "key-abcdefghijklmnopqrst", MAILGUN_DOMAIN: "mg.eksempel.no", MAILGUN_TO: "a@b.no" });
+}
+
+// --- client connectors: public values go straight into the request
+{
+  const ga = connectorById("google-analytics")!;
+  assert.equal(validate(ga, { id: "G-ABC123XYZ9" }), null);
+  assert.match(validate(ga, { id: "UA-123" })!, /G-/);
+  assert.match(ga.request({ id: "G-ABC123XYZ9" }), /Godta/, "analytics waits for consent");
+  assert.match(connectorById("google-maps")!.request({ key: "AIza" + "x".repeat(35), address: "Karl Johans gate 1, Oslo" }), /Karl%20Johans%20gate%201%2C%20Oslo/);
+  assert.match(connectorById("tally")!.request({ url: "https://tally.so/r/abc123" }), /tally\.so\/embed\/abc123/);
+  assert.match(validate(connectorById("logo-dev")!, { token: "sk_secret_value_here" })!, /pk_/, "the secret key is refused");
+}
+
+// --- site verification goes into /brand.json and out as meta tags
+{
+  const gsc = connectorById("google-search-console")!;
+  assert.match(gsc.request({ token: "abcdefghij0123456789_-" }), /"verification": \{ "google": "abcdefghij0123456789_-" \}/);
+  const brand = readBrand({ "/brand.json": JSON.stringify({ name: "A", verification: { google: "abcdefghij0123456789_-", bing: "short" } }) }, "A");
+  assert.equal(brand.verification.google, "abcdefghij0123456789_-");
+  assert.equal(brand.verification.bing, null, "a code that does not look right is ignored");
+  const tags = metaTags(brand, "A");
+  assert.match(tags, /name="google-site-verification" content="abcdefghij0123456789_-"/);
+  assert.doesNotMatch(tags, /msvalidate/);
+  const hostile = readBrand({ "/brand.json": JSON.stringify({ verification: { google: 'abcdefghij0123456789"><script>' } }) }, "A");
+  assert.equal(hostile.verification.google, null, "markup never gets into the page");
+}
 
 // --- validation catches typos before they reach the code
 assert.equal(validate(paddle, goodPaddle), null);

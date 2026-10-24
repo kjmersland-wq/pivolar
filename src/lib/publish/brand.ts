@@ -13,7 +13,11 @@ export type Brand = {
   /** Contents of /public/logo.svg (or the favicon) when the project has one. */
   logoSvg: string | null;
   hasFavicon: boolean;
+  /** Site ownership codes from Google Search Console and Bing Webmaster Tools, written as meta tags. */
+  verification: { google: string | null; bing: string | null };
 };
+
+const CODE = /^[\w-]{20,120}$/;
 
 export type OgStyle = "aurora" | "editorial" | "vivid";
 const OG_STYLES: OgStyle[] = ["aurora", "editorial", "vivid"];
@@ -46,6 +50,12 @@ export function safeSvg(svg: string | undefined): string | null {
   return svg;
 }
 
+function readVerification(value: unknown): Brand["verification"] {
+  const v = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const code = (x: unknown) => (typeof x === "string" && CODE.test(x.trim()) ? x.trim() : null);
+  return { google: code(v.google), bing: code(v.bing) };
+}
+
 export function readBrand(files: FileMap, fallbackName: string): Brand {
   let raw: Record<string, unknown> = {};
   try {
@@ -66,6 +76,7 @@ export function readBrand(files: FileMap, fallbackName: string): Brand {
     ogStyle: OG_STYLES.find((style) => style === raw.ogStyle) ?? "aurora",
     logoSvg: safeSvg(files["/public/logo.svg"]) ?? safeSvg(files["/public/favicon.svg"]),
     hasFavicon: safeSvg(files["/public/favicon.svg"]) !== null,
+    verification: readVerification(raw.verification),
   };
 }
 
@@ -113,6 +124,8 @@ export function metaTags(brand: Brand, title: string): string {
   return [
     `<meta name="description" content="${description}" />`,
     `<link rel="canonical" href="__SITE_URL__/" />`,
+    brand.verification.google ? `<meta name="google-site-verification" content="${escapeAttr(brand.verification.google)}" />` : "",
+    brand.verification.bing ? `<meta name="msvalidate.01" content="${escapeAttr(brand.verification.bing)}" />` : "",
     `<meta name="theme-color" content="${brand.primary}" />`,
     brand.hasFavicon ? `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />` : "",
     `<meta property="og:type" content="website" />`,

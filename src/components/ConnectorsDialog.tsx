@@ -1,18 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, CreditCard, ExternalLink, Mail, Plug, X } from "lucide-react";
-import { CONNECTORS, missingFields, publicValues, validate, type Category, type Connector } from "@/lib/connectors";
-import { loadConnectors, saveConnector } from "@/lib/connectors/store";
+import { useMemo, useState } from "react";
+import { ArrowLeft, ExternalLink, Plug, Search, X } from "lucide-react";
+import { CATEGORIES, CATEGORY_LABELS, CONNECTORS, KIND_LABELS, missingFields, publicValues, searchConnectors, validate, type Category, type Connector } from "@/lib/connectors";
+import { loadConnectors, removeConnector, saveConnector, type Saved } from "@/lib/connectors/store";
 import type { FileMap } from "@/lib/files";
 import { cn } from "@/lib/utils";
 
-const GROUPS: { category: Category; label: string; Icon: typeof CreditCard }[] = [
-  { category: "betaling", label: "Betaling", Icon: CreditCard },
-  { category: "e-post", label: "E-post og nyhetsbrev", Icon: Mail },
-];
+type Filter = "connected" | "all" | Category;
 
-/** Adds an outside service to the project: asks for what it needs, writes any server files and has the model build the page part. */
+const KIND_TONE = { ready: "bg-emerald-500/15 text-emerald-400", client: "bg-sky-500/15 text-sky-400", assisted: "bg-amber-500/15 text-amber-400", soon: "bg-surface text-faint" } as const;
+
+/** Browse outside services by category, connect one to the project and see what is connected. */
 export function ConnectorsDialog({
   open,
   projectId,
@@ -30,15 +29,30 @@ export function ConnectorsDialog({
   onFix: (text: string) => void;
   onAddFiles: (files: FileMap) => void;
 }) {
+  const [saved, setSaved] = useState<Saved | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
   const [chosen, setChosen] = useState<Connector | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+
+  const current = useMemo(() => saved ?? (open ? loadConnectors(projectId) : {}), [saved, open, projectId]);
+  const isConnected = (connector: Connector) => Object.values(current[connector.id] ?? {}).some(Boolean) || (connector.files ? Object.keys(connector.files({})).every((path) => path in files) : false);
+  const connectedCount = CONNECTORS.filter(isConnected).length;
+
+  const list = useMemo(() => {
+    const byFilter = CONNECTORS.filter((c) => (filter === "all" ? true : filter === "connected" ? isConnected(c) : c.category === filter));
+    // Connectors that can be added come before those that are only listed.
+    return searchConnectors(query, byFilter).sort((a, b) => Number(a.kind === "soon") - Number(b.kind === "soon"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isConnected reads current and files
+  }, [filter, query, current, files]);
+
   if (!open) return null;
 
   function pick(connector: Connector | null) {
     setChosen(connector);
     setError("");
-    setValues(connector ? (loadConnectors(projectId)[connector.id] ?? {}) : {});
+    setValues(connector ? (current[connector.id] ?? {}) : {});
   }
 
   function add() {
@@ -48,17 +62,29 @@ export function ConnectorsDialog({
     const problem = validate(chosen, values);
     if (problem) return setError(problem);
     saveConnector(projectId, chosen.id, values);
+    setSaved(loadConnectors(projectId));
     const extra = chosen.files?.(values);
     if (extra) onAddFiles(extra);
     onFix(chosen.request(publicValues(chosen, values)));
     onClose();
   }
 
-  const installed = (connector: Connector) => Object.keys(loadConnectors(projectId)[connector.id] ?? {}).length > 0 || (connector.files ? Object.keys(connector.files({})).every((p) => p in files) : false);
+  function remove() {
+    if (!chosen) return;
+    removeConnector(projectId, chosen.id);
+    setSaved(loadConnectors(projectId));
+    pick(null);
+  }
+
+  const chips: { id: Filter; label: string; count: number }[] = [
+    { id: "connected", label: "Tilkoblet", count: connectedCount },
+    { id: "all", label: "Alle", count: CONNECTORS.length },
+    ...CATEGORIES.map((category) => ({ id: category as Filter, label: CATEGORY_LABELS[category], count: CONNECTORS.filter((c) => c.category === category).length })).filter((chip) => chip.count > 0),
+  ];
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="connectors-title">
-      <div className="card flex max-h-[85vh] w-full max-w-xl flex-col rounded-2xl p-6">
+      <div className="card flex h-[85vh] w-full max-w-2xl flex-col rounded-2xl p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-2">
             {chosen && (
@@ -70,7 +96,7 @@ export function ConnectorsDialog({
               <h2 id="connectors-title" className="text-[17px] font-semibold">
                 {chosen ? chosen.name : "Koblinger"}
               </h2>
-              <p className="mt-1 text-[13px] text-muted">{chosen ? chosen.summary : "Legg til betaling og e-post på siden din uten å skrive koden selv."}</p>
+              <p className="mt-1 text-[13px] text-muted">{chosen ? chosen.summary : "Koble siden til betaling, e-post, meldinger og statistikk."}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Lukk" className="grid size-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-fg">
@@ -78,60 +104,85 @@ export function ConnectorsDialog({
           </button>
         </div>
 
-        <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-auto">
-          {chosen ? (
-            <>
-              {chosen.fields.map((field) => (
-                <label key={field.key} className="block text-[12.5px] text-muted">
-                  {field.label}
-                  <input
-                    value={values[field.key] ?? ""}
-                    onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
-                    placeholder={field.placeholder}
-                    type={field.secret ? "password" : "text"}
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="mt-1 w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-[14px] text-fg outline-none transition focus:border-line-strong"
-                  />
-                  {field.help && <span className="mt-1 block text-faint">{field.help}</span>}
-                </label>
-              ))}
-              <a href={chosen.docs} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] text-muted transition hover:text-fg">
-                Hvor finner jeg dette? <ExternalLink className="size-3" />
-              </a>
-              <p className="rounded-xl border border-line bg-surface-2 p-3 text-[12.5px] text-muted">{chosen.after}</p>
-              {error && <p className="text-[13px] text-red-400">{error}</p>}
-            </>
-          ) : (
-            GROUPS.map(({ category, label, Icon }) => (
-              <div key={category}>
-                <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-[0.12em] text-faint">
-                  <Icon className="size-3.5" />
-                  {label}
-                </p>
-                <div className="space-y-2">
-                  {CONNECTORS.filter((c) => c.category === category).map((connector) => (
-                    <button key={connector.id} type="button" onClick={() => pick(connector)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 p-3 text-left transition hover:border-line-strong">
-                      <span className="min-w-0">
-                        <span className="block text-[13.5px] font-medium">{connector.name}</span>
-                        <span className="mt-0.5 block text-[12.5px] text-muted">{connector.summary}</span>
-                      </span>
-                      <span className={cn("shrink-0 rounded-md px-1.5 py-0.5 text-[11px]", installed(connector) ? "bg-emerald-500/15 text-emerald-400" : "bg-surface text-muted")}>{installed(connector) ? "Lagt til" : "Legg til"}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
         {chosen ? (
-          <button type="button" disabled={busy} onClick={add} className="bg-brand mt-4 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-50">
-            <Plug className="size-4" />
-            Legg til i prosjektet
-          </button>
+          <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-auto">
+            <span className={cn("inline-block rounded-md px-1.5 py-0.5 text-[11px] font-medium", KIND_TONE[chosen.kind])}>{KIND_LABELS[chosen.kind]}</span>
+            {chosen.kind === "soon" ? (
+              <p className="rounded-xl border border-line bg-surface-2 p-3 text-[13px] text-muted">{chosen.after}</p>
+            ) : (
+              <>
+                {chosen.fields.map((field) => (
+                  <label key={field.key} className="block text-[12.5px] text-muted">
+                    {field.label}
+                    {field.optional ? " (valgfritt)" : ""}
+                    <input
+                      value={values[field.key] ?? ""}
+                      onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+                      placeholder={field.placeholder}
+                      type={field.secret ? "password" : "text"}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="mt-1 w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-[14px] text-fg outline-none transition focus:border-line-strong"
+                    />
+                    {field.help && <span className="mt-1 block text-faint">{field.help}</span>}
+                  </label>
+                ))}
+                <a href={chosen.docs} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] text-muted transition hover:text-fg">
+                  Dokumentasjon <ExternalLink className="size-3" />
+                </a>
+                {chosen.after && <p className="rounded-xl border border-line bg-surface-2 p-3 text-[12.5px] text-muted">{chosen.after}</p>}
+                {error && <p className="text-[13px] text-red-400">{error}</p>}
+              </>
+            )}
+          </div>
         ) : (
-          <p className="mt-4 text-[12px] text-muted">Hemmelige nøkler (som Resend) blir ikke skrevet inn i koden. De lagres bare i denne nettleseren og sendes til siden din når du publiserer.</p>
+          <>
+            <div className="relative mt-4">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Søk i koblinger" aria-label="Søk i koblinger" className="w-full rounded-xl border border-line bg-surface-2 py-2.5 pl-9 pr-3 text-[14px] outline-none transition focus:border-line-strong" />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {chips.map((chip) => (
+                <button key={chip.id} type="button" onClick={() => setFilter(chip.id)} className={cn("rounded-full border px-2.5 py-1 text-[12px] transition", filter === chip.id ? "border-line-strong bg-bg-soft font-medium" : "border-line text-muted hover:text-fg")}>
+                  {chip.label} <span className="text-faint">{chip.count}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-auto">
+              {list.length === 0 ? (
+                <p className="rounded-xl border border-line bg-surface-2 p-4 text-[13.5px] text-muted">{filter === "connected" && !query ? "Ingenting er koblet til ennå. Velg en tjeneste under «Alle»." : "Ingen koblinger passer."}</p>
+              ) : (
+                list.map((connector) => (
+                  <button key={connector.id} type="button" onClick={() => pick(connector)} className={cn("flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 p-3 text-left transition hover:border-line-strong", connector.kind === "soon" && "opacity-60")}>
+                    <span className="min-w-0">
+                      <span className="block text-[13.5px] font-medium">{connector.name}</span>
+                      <span className="mt-0.5 block text-[12.5px] text-muted">{connector.summary}</span>
+                      <span className="mt-1 block text-[11.5px] text-faint">{CATEGORY_LABELS[connector.category]}</span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={cn("rounded-md px-1.5 py-0.5 text-[11px]", KIND_TONE[connector.kind])}>{connector.kind === "soon" ? "Kommer" : KIND_LABELS[connector.kind].split(" (")[0]}</span>
+                      {isConnected(connector) && <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[11px] text-emerald-400">Tilkoblet</span>}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+            <p className="mt-3 text-[12px] text-muted">Hemmelige nøkler blir ikke skrevet inn i koden. De lagres bare i denne nettleseren og sendes til siden din når du publiserer.</p>
+          </>
+        )}
+
+        {chosen && chosen.kind !== "soon" && (
+          <div className="mt-4 flex gap-2">
+            {Object.values(current[chosen.id] ?? {}).some(Boolean) && (
+              <button type="button" onClick={remove} className="rounded-xl border border-line px-4 py-2.5 text-[13.5px] text-muted transition hover:text-fg">
+                Fjern nøkler
+              </button>
+            )}
+            <button type="button" disabled={busy} onClick={add} className="bg-brand flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-50">
+              <Plug className="size-4" />
+              Legg til i prosjektet
+            </button>
+          </div>
         )}
       </div>
     </div>
