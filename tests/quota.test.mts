@@ -161,7 +161,8 @@ const now = Date.parse("2026-10-24T10:00:00Z");
   // Missing database functions: refused, unless the owner has said to let things through between a deploy and its migration
   assert.equal((await openAiGate(fakeDb({ rateError: noFunction }).db, user, base, now)).ok, false);
   const blocked = await openAiGate(fakeDb({ rateError: noFunction }).db, user, base, now);
-  assert.equal(blocked.ok === false && blocked.message, DENIALS.unset.message);
+  assert.ok(blocked.ok === false && blocked.message.startsWith(DENIALS.unset.message), "the same refusal");
+  assert.ok(blocked.ok === false && blocked.message.includes("rate_limit:") && blocked.message.includes(noFunction.message), "and it says which step failed and what the database said");
   const through = await openAiGate(fakeDb({ rateError: noFunction, reserveError: noFunction, settings: null }).db, user, quotaConfig({ QUOTA_ALLOW_UNSET: "1" }), now);
   assert.equal(through.ok, true);
   assert.equal((await openAiGate(fakeDb({ settingsError: true }).db, user, base, now)).ok, false, "unreadable budget: refused");
