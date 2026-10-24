@@ -99,8 +99,12 @@ export function RunnerPreview({ projectId, files, github }: { projectId: string;
       if (!previous || previous === files) return;
       fetch("/api/runner", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sync", id: projectId, files, previous }) })
         .then((r) => r.json())
-        .then((data: { running?: boolean }) => {
-          if (data.running === false) setPhase("idle");
+        .then((data: { running?: boolean; reason?: string }) => {
+          if (data.running === false && data.reason === "max-lifetime") {
+            // Stopped on purpose: a run may only live so long. Say so, so it does not look like a crash.
+            setError("Kjøringen ble stoppet fordi den hadde gått så lenge den får lov til (to timer). Start den på nytt for å fortsette.");
+            setPhase("error");
+          } else if (data.running === false) setPhase("idle");
           else sent.current = files;
         })
         .catch(() => {});

@@ -133,3 +133,5 @@ Gruppen går inn i en fast tabell (`src/lib/hosting/rules.ts`) som sier hvilken 
 | Fullstack | Hetzner (ca. 6 EUR), så Render og Railway |
 
 Importrapporten viser gruppen og anbefalt vert. Knappen **Hosting** i et prosjekt viser rangeringen og lar deg legge oppsettsfilene i prosjektet (filer som finnes fra før blir ikke overskrevet). For en server lages `Dockerfile` for språket (Node, Python eller PHP), `docker-compose.yml` med databasen prosjektet trenger, `.dockerignore`, en workflow som ber Coolify bygge på nytt, og `HOSTING.md` med stegene for Coolify og Dokku. Startkommandoen er gjettet ut fra rammeverket, så sjekk den.
+
+**Prosjektkjøring (Sandbox):** hver kjøring tilhører brukeren som startet den. Navnet bygges av en kortversjon av brukerens id og prosjekt-id, så andre kan ikke stoppe eller bruke den selv om de kjenner prosjekt-id-en. En kjøring lever høyst `SANDBOX_MAX_MINUTES` minutter (standard 120, aldri over 480) fra den ble startet. Når filer sendes til den, holdes den i live 10 minutter fra nå, men aldri forbi grensen, og gjentatte kall legger ikke på mer tid. Når grensen nås, stoppes kjøringen og brukeren får beskjed.

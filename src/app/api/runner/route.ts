@@ -1,5 +1,7 @@
 import { Sandbox } from "@vercel/sandbox";
-import { limit } from "@/lib/quota/server";
+import { quotaConfig } from "@/lib/quota/config";
+import { limit, signedInUserId } from "@/lib/quota/server";
+import { extensionFor, isPastLimit, sandboxName } from "@/lib/runner/limits";
 import { z } from "zod";
 import { diffImport } from "@/lib/github/changes";
 import { downloadBranch, GitHubImportError } from "@/lib/github/repo";
@@ -24,9 +26,10 @@ const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("stop"), id: Id }),
 ]);
 
-const nameFor = (id: string) => `pivolar-${id}`;
-/** Long enough to work in; extended every time files are sent. */
+/** Long enough to work in; extended when files are sent, but never past the longest a run may live. */
 const TIMEOUT = 30 * 60_000;
+/** How long a run is kept alive from the last time files were sent to it. */
+const KEEP_ALIVE = 10 * 60_000;
 
 /** Whether running projects is possible here: Vercel Sandbox needs a Vercel login or token. */
 export async function GET() {
@@ -42,6 +45,12 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Ugyldig forespørsel." }, { status: 400 });
   const body = parsed.data;
 
+  // A run belongs to the signed-in user: the name carries the user, so another user cannot reach it, even with the project id.
+  const userId = await signedInUserId();
+  if (!userId) return Response.json({ error: "Du må logge inn." }, { status: 401 });
+  const nameFor = (id: string) => sandboxName(userId, id);
+  const maxMs = quotaConfig().sandboxMaxMs;
+
   try {
     if (body.action === "stop") {
       const sandbox = await Sandbox.get({ name: nameFor(body.id), resume: false }).catch(() => null);
@@ -52,15 +61,26 @@ export async function POST(request: Request) {
     if (body.action === "sync") {
       const sandbox = await Sandbox.get({ name: nameFor(body.id), resume: false }).catch(() => null);
       if (!sandbox) return Response.json({ running: false });
+      // A run that has lived as long as it may is stopped, however often files are sent to it.
+      const now = Date.now();
+      const next = extensionFor({ now, createdAt: sandbox.createdAt.getTime(), expiresAt: sandbox.expiresAt ? sandbox.expiresAt.getTime() : null, maxMs, wantMs: KEEP_ALIVE });
+      if (next.action === "stop") {
+        await sandbox.stop().catch(() => {});
+        return Response.json({ running: false, reason: "max-lifetime" });
+      }
       const { write, remove } = diffImport(projectFiles(body.previous), projectFiles(body.files));
       await syncProject(sandbox, write, remove);
-      await sandbox.extendTimeout(10 * 60_000).catch(() => {});
+      if (next.action === "extend") await sandbox.extendTimeout(next.ms).catch(() => {});
       return Response.json({ running: true, written: Object.keys(write).length, removed: remove.length });
     }
 
     // Starting a run is what costs money (a throwaway VM). Stopping and syncing are not counted.
     const stopped = await limit("runner");
     if (stopped) return stopped;
+
+    // An old run that is still alive is not reused: it is stopped, and the new one gets a full lifetime of its own.
+    const old = await Sandbox.get({ name: nameFor(body.id), resume: false }).catch(() => null);
+    if (old && isPastLimit(old.createdAt.getTime(), Date.now(), maxMs)) await old.stop().catch(() => {});
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

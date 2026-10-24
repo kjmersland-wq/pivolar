@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { MAX_TIMEOUT_MS, quotaConfig, RATES } from "../src/lib/quota/config.ts";
 import { budgetSince, CAP_NOTE, costOfSteps, DENIALS, overCap, startOfOsloMonth } from "../src/lib/quota/decide.ts";
 import { checkRate, IMAGE_ALLOWANCE_USD, openAiGate } from "../src/lib/quota/gate.ts";
+import { extensionFor, isPastLimit, sandboxName } from "../src/lib/runner/limits.ts";
 import { DEFAULT_PRICES } from "../src/lib/usage/pricing.ts";
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -11,9 +12,11 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 // --- configuration: careful defaults, nonsense falls back, nothing can be set above the platform's limits
 {
   const d = quotaConfig({});
-  assert.deepEqual(d, { aiDisabled: false, importDisabled: false, requestCapUsd: 1.5, maxOutputTokens: 16_000, timeoutMs: 240_000, globalDailyUsd: null, allowUnset: false });
-  const c = quotaConfig({ AI_DISABLED: "1", IMPORT_DISABLED: "true", REQUEST_CAP_USD: "0.5", MAX_OUTPUT_TOKENS: "8000", REQUEST_TIMEOUT_MS: "60000", GLOBAL_DAILY_USD: "25", QUOTA_ALLOW_UNSET: "yes" });
-  assert.deepEqual(c, { aiDisabled: true, importDisabled: true, requestCapUsd: 0.5, maxOutputTokens: 8000, timeoutMs: 60_000, globalDailyUsd: 25, allowUnset: true });
+  assert.deepEqual(d, { aiDisabled: false, importDisabled: false, requestCapUsd: 1.5, maxOutputTokens: 16_000, timeoutMs: 240_000, sandboxMaxMs: 120 * 60_000, globalDailyUsd: null, allowUnset: false });
+  const c = quotaConfig({ AI_DISABLED: "1", IMPORT_DISABLED: "true", REQUEST_CAP_USD: "0.5", MAX_OUTPUT_TOKENS: "8000", REQUEST_TIMEOUT_MS: "60000", SANDBOX_MAX_MINUTES: "30", GLOBAL_DAILY_USD: "25", QUOTA_ALLOW_UNSET: "yes" });
+  assert.deepEqual(c, { aiDisabled: true, importDisabled: true, requestCapUsd: 0.5, maxOutputTokens: 8000, timeoutMs: 60_000, sandboxMaxMs: 30 * 60_000, globalDailyUsd: 25, allowUnset: true });
+  assert.equal(quotaConfig({ SANDBOX_MAX_MINUTES: "99999" }).sandboxMaxMs, 480 * 60_000, "a run can never be allowed more than eight hours");
+  assert.equal(quotaConfig({ SANDBOX_MAX_MINUTES: "abc" }).sandboxMaxMs, 120 * 60_000);
   for (const bad of ["", "abc", "-3", "0", "NaN", "Infinity"]) assert.equal(quotaConfig({ REQUEST_CAP_USD: bad }).requestCapUsd, 1.5, `cap "${bad}" falls back`);
   assert.equal(quotaConfig({ REQUEST_TIMEOUT_MS: "9999999" }).timeoutMs, MAX_TIMEOUT_MS, "never above what the platform allows");
   assert.ok(MAX_TIMEOUT_MS < 300_000);
@@ -171,6 +174,43 @@ const now = Date.parse("2026-10-24T10:00:00Z");
   assert.deepEqual(rated.calls[0]!.args, { p_route: "runner", p_window_seconds: RATES.runner.windowSeconds, p_max: RATES.runner.max });
 }
 
+// --- runs of imported projects: one user's, and not for ever
+{
+  const a = sandboxName("user-a", "9289b02c-b50f-4889-a1e8-975f9dc426de");
+  assert.equal(a, sandboxName("user-a", "9289b02c-b50f-4889-a1e8-975f9dc426de"), "the same user and project always get the same name");
+  assert.notEqual(a, sandboxName("user-b", "9289b02c-b50f-4889-a1e8-975f9dc426de"), "another user gets another name for the same project id");
+  assert.notEqual(a, sandboxName("user-a", "11111111-1111-1111-1111-111111111111"));
+  assert.match(a, /^pv-[0-9a-f]{10}-9289b02c/);
+  assert.ok(a.length <= 80);
+  assert.ok(!a.includes("user-a"), "the user id itself is not in the name");
+
+  const min = 60_000;
+  const max = 120 * min;
+  const base = { createdAt: 0, maxMs: max, wantMs: 10 * min };
+  // Early in a run: keep it alive 10 minutes from now
+  assert.deepEqual(extensionFor({ ...base, now: 5 * min, expiresAt: 30 * min }), { action: "keep" }, "already alive for long enough, so nothing is added");
+  assert.deepEqual(extensionFor({ ...base, now: 25 * min, expiresAt: 30 * min }), { action: "extend", ms: 5 * min }, "topped up to 10 minutes from now, not 10 minutes on top");
+  assert.deepEqual(extensionFor({ ...base, now: 25 * min, expiresAt: null }), { action: "extend", ms: 10 * min });
+  // The same call again right after changes nothing, so many syncs cannot pile up time
+  assert.deepEqual(extensionFor({ ...base, now: 25.1 * min, expiresAt: 35 * min }), { action: "keep" });
+  // Near the end it is never extended past the limit
+  assert.deepEqual(extensionFor({ ...base, now: 115 * min, expiresAt: 118 * min }), { action: "extend", ms: 2 * min }, "only up to the limit");
+  assert.deepEqual(extensionFor({ ...base, now: 119.9 * min, expiresAt: 120 * min }), { action: "keep" });
+  // At the limit it is stopped, however often files are sent
+  assert.deepEqual(extensionFor({ ...base, now: 120 * min, expiresAt: 125 * min }), { action: "stop" });
+  assert.deepEqual(extensionFor({ ...base, now: 500 * min, expiresAt: null }), { action: "stop" });
+  assert.equal(isPastLimit(0, 119 * min, max), false);
+  assert.equal(isPastLimit(0, 120 * min, max), true);
+  // Whatever the sequence of syncs, the end of life never moves past the limit
+  let expires: number | null = 30 * min;
+  for (let now = 1; now < 200; now++) {
+    const step = extensionFor({ ...base, now: now * min, expiresAt: expires });
+    if (step.action === "stop") break;
+    if (step.action === "extend") expires = (expires ?? now * min) + step.ms;
+    assert.ok((expires ?? 0) <= Math.max(max, 30 * min), `at minute ${now} the end is ${expires! / min}`);
+  }
+}
+
 // --- no route that spends money may skip the checks
 {
   const files: string[] = [];
@@ -200,6 +240,11 @@ const now = Date.parse("2026-10-24T10:00:00Z");
     assert.match(read(`src/app/api/${path}/route.ts`), new RegExp(`limit\\("${route}"\\)`), `${path} is rate limited`);
   }
   const runner = read("src/app/api/runner/route.ts");
+  assert.match(runner, /sandboxName\(userId, id\)/, "the run is named after the user");
+  assert.doesNotMatch(runner, /`pivolar-\$\{/, "the old name without the user is gone");
+  assert.match(runner, /extensionFor\(/);
+  assert.doesNotMatch(runner, /extendTimeout\(10 \* 60_000\)/, "no fixed extension that can pile up");
+  assert.ok(runner.indexOf("signedInUserId()") < runner.indexOf("Sandbox.get"), "the user is known before any run is looked up");
   assert.ok(runner.indexOf('limit("runner")') > runner.indexOf('body.action === "sync"'), "stopping and syncing are not counted, only starting");
 }
 

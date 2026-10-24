@@ -27,6 +27,8 @@ export type QuotaConfig = {
   maxOutputTokens: number;
   /** A request is cut off after this long. Must be below the platform's own limit (300 s). */
   timeoutMs: number;
+  /** The longest a run of an imported project may live, counted from when it was started. */
+  sandboxMaxMs: number;
   /** What the whole service may spend on AI in a day, in dollars. Null means no cap. */
   globalDailyUsd: number | null;
   /** Let requests through when the quota functions are missing in the database. Only for the time between a deploy and its migration. */
@@ -48,6 +50,7 @@ export function quotaConfig(env: Record<string, string | undefined> = process.en
     requestCapUsd: Math.min(positive(env.REQUEST_CAP_USD) ?? 1.5, 50),
     maxOutputTokens: Math.min(Math.round(positive(env.MAX_OUTPUT_TOKENS) ?? 16_000), 64_000),
     timeoutMs: Math.min(Math.round(positive(env.REQUEST_TIMEOUT_MS) ?? 240_000), MAX_TIMEOUT_MS),
+    sandboxMaxMs: Math.min(Math.round(positive(env.SANDBOX_MAX_MINUTES) ?? 120), 480) * 60_000,
     globalDailyUsd: positive(env.GLOBAL_DAILY_USD) ?? null,
     allowUnset: on(env.QUOTA_ALLOW_UNSET),
   };
