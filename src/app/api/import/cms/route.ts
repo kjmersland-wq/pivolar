@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { audit } from "@/lib/audit";
 import { loadModel, runImagesStep, saveJob } from "@/lib/import/job";
 import { ImportFetchError } from "@/lib/import/safe-fetch";
 import { toSkeleton, roughTokens } from "@/lib/import/skeleton";
@@ -57,6 +58,8 @@ export async function POST(request: Request) {
     const { data: auth } = await db.auth.getUser();
     if (!auth.user) return NextResponse.json({ error: "Du må logge inn." }, { status: 401 });
     const job = await saveJob(db, auth.user.id, model.url, model);
+    // The owner said the site is theirs. That is written down with the import, so it can be shown later.
+    await audit(db, "import_owner_confirmed", { url: model.url, job, pages: model.stats.pages + model.stats.posts, claim: "owner-or-permitted" });
     // What the AI step will have to read, if it is used: the skeletons, not the texts.
     const skeletonTokens = model.pages.reduce((sum, page) => sum + roughTokens(toSkeleton(page.blocks).text), 0);
     return NextResponse.json({

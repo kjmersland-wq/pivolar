@@ -48,6 +48,7 @@ export const DENIALS = {
   signedOut: { status: 401, message: "Du må logge inn." },
   aiDisabled: { status: 503, message: "AI er slått av midlertidig. Prøv igjen senere." },
   importDisabled: { status: 503, message: "Import er slått av midlertidig. Prøv igjen senere." },
+  concurrent: { status: 429, message: "Du har allerede flere kjøringer i gang. Stopp en av dem, så kan du starte en ny." },
   rate: { status: 429, message: "For mange forespørsler på kort tid. Vent litt og prøv igjen." },
   budget: { status: 402, message: "AI-budsjettet ditt er brukt opp. Fyll på under Forbruk, så kan du fortsette." },
   global: { status: 503, message: "Tjenesten har brukt dagens AI-grense. Prøv igjen i morgen." },

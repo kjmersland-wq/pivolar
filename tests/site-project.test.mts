@@ -283,7 +283,7 @@ const render = (location: string) => renderToString(React.createElement(StaticRo
   assert.match(ui, /if \(busy\) return;/, "the window cannot be closed in the middle of a step");
   const client = read("src/lib/import/client.ts");
   assert.match(client, /confirmOwner: true/);
-  assert.match(client, /buildSiteProject\(loaded\.model/);
+  assert.match(client, /fitToRoom\(loaded\.model, \(m\) => buildSiteProject\(m, imageUrl\)/);
   assert.match(client, /source: "cms"/);
   assert.doesNotMatch(client, /anthropic|openai|streamText|generateText/i, "the whole import, from the button to the project, uses no AI");
 }

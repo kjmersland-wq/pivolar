@@ -134,7 +134,7 @@ Gruppen går inn i en fast tabell (`src/lib/hosting/rules.ts`) som sier hvilken 
 
 Importrapporten viser gruppen og anbefalt vert. Knappen **Hosting** i et prosjekt viser rangeringen og lar deg legge oppsettsfilene i prosjektet (filer som finnes fra før blir ikke overskrevet). For en server lages `Dockerfile` for språket (Node, Python eller PHP), `docker-compose.yml` med databasen prosjektet trenger, `.dockerignore`, en workflow som ber Coolify bygge på nytt, og `HOSTING.md` med stegene for Coolify og Dokku. Startkommandoen er gjettet ut fra rammeverket, så sjekk den.
 
-**Prosjektkjøring (Sandbox):** hver kjøring tilhører brukeren som startet den. Navnet bygges av en kortversjon av brukerens id og prosjekt-id, så andre kan ikke stoppe eller bruke den selv om de kjenner prosjekt-id-en. En kjøring lever høyst `SANDBOX_MAX_MINUTES` minutter (standard 120, aldri over 480) fra den ble startet. Når filer sendes til den, holdes den i live 10 minutter fra nå, men aldri forbi grensen, og gjentatte kall legger ikke på mer tid. Når grensen nås, stoppes kjøringen og brukeren får beskjed.
+**Prosjektkjøring (Sandbox):** hver kjøring tilhører brukeren som startet den. Navnet bygges av en kortversjon av brukerens id og prosjekt-id, så andre kan ikke stoppe eller bruke den selv om de kjenner prosjekt-id-en. En kjøring lever høyst `SANDBOX_MAX_MINUTES` minutter (standard 120, aldri over 480) fra den ble startet. Når filer sendes til den, holdes den i live 10 minutter fra nå, men aldri forbi grensen, og gjentatte kall legger ikke på mer tid. Når grensen nås, stoppes kjøringen og brukeren får beskjed. En bruker kan ha høyst `SANDBOX_MAX_CONCURRENT` kjøringer i gang samtidig (standard 2, aldri over 10). Antallet telles på serveren fra brukerens egne kjøringer før noe starter, en kjøring som er stoppet teller ikke, og kan listen ikke leses, startes ingenting.
 
 ## Import fra WordPress (uten AI)
 
@@ -199,3 +199,9 @@ Alt i importen skjer med vanlig kode. AI brukes på ett sted, og bare hvis eiere
 - **Kontroll:** svaret kuttes ned til disse feltene (`sanitizeDesign`): ukjente valg blir standard, tekst mister `<`, `>` og kontrolltegn og kuttes i lengde, og en knapp utenfor siden fjernes. Det samme gjøres på nytt når prosjektet bygges. Beskrivelsen av nettstedet er merket som data i instruksjonen.
 - **Grenser:** den samme porten som chatten (innlogget, AI av/på, døgntak for tjenesten, brukerens budsjett med beløp satt av og gitt tilbake), egen kvote på 10 forslag i timen, høyst 1 200 tokens ut, 60 sekunder, og kostnaden telles i forbruket.
 - Skriftparet brukes bare når det gamle nettstedet ikke hadde egne skrifter som kunne følge med.
+
+
+### Lagringsgrense og logg ved import
+
+- **Nettleserlagringen** er liten (ca. 5 MB). Før prosjektet lages, måles størrelsen mot det som er ledig (høyst ca. 2,4 millioner tegn til sammen, med margin). Er nettstedet for stort, utelates de eldste innleggene til det passer, og det står i importnotatet (`IMPORT.md`) og i meldingen. Sidene utelates aldri, og innleggene som ble utelatt ligger fortsatt i importen på serveren. Passer ikke engang sidene, stopper importen med en klar melding om å slette gamle prosjekter.
+- **Eierbekreftelsen** («dette er mitt nettsted») skrives til `audit_log` når importen er lagret, med adresse, jobb og antall sider. Brukeren kan lese sin egen logg, men ikke skrive til den: det skjer gjennom funksjonen `log_audit`, som bare skriver for den innloggede, bare for handlinger på listen, og bare små data. Oppsett: kjør `supabase/migrations/20261024200000_pivolar_audit.sql` i Supabase. Mangler funksjonen, stoppes ikke importen.

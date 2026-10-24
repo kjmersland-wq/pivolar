@@ -1,7 +1,8 @@
 import { Sandbox } from "@vercel/sandbox";
 import { quotaConfig } from "@/lib/quota/config";
+import { DENIALS } from "@/lib/quota/decide";
 import { limit, signedInUserId } from "@/lib/quota/server";
-import { extensionFor, isPastLimit, sandboxName } from "@/lib/runner/limits";
+import { atConcurrentLimit, extensionFor, isPastLimit, ownerPrefix, sandboxName } from "@/lib/runner/limits";
 import { z } from "zod";
 import { diffImport } from "@/lib/github/changes";
 import { downloadBranch, GitHubImportError } from "@/lib/github/repo";
@@ -77,6 +78,14 @@ export async function POST(request: Request) {
     // Starting a run is what costs money (a throwaway VM). Stopping and syncing are not counted.
     const stopped = await limit("runner");
     if (stopped) return stopped;
+
+    // Only a few runs at a time per user, however slowly they are started. If the list cannot be read, nothing is started.
+    try {
+      const listed = await (await Sandbox.list({ namePrefix: ownerPrefix(userId) })).toArray();
+      if (atConcurrentLimit(listed, nameFor(body.id), quotaConfig().sandboxMaxConcurrent)) return Response.json({ error: DENIALS.concurrent.message }, { status: DENIALS.concurrent.status });
+    } catch {
+      return Response.json({ error: "Kunne ikke sjekke kjøringene dine akkurat nå. Prøv igjen om litt." }, { status: 503 });
+    }
 
     // An old run that is still alive is not reused: it is stopped, and the new one gets a full lifetime of its own.
     const old = await Sandbox.get({ name: nameFor(body.id), resume: false }).catch(() => null);

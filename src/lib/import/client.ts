@@ -1,4 +1,5 @@
 import { importProject } from "@/lib/projects";
+import { fitToRoom, fullMessage, storageRoom } from "./fit";
 import { buildSiteProject, type SiteProject } from "./site-project";
 import type { Design } from "./design";
 import type { SiteModel } from "./model";
@@ -43,7 +44,12 @@ export async function createProjectFromJob(job: string, url: string): Promise<{ 
   try {
     const loaded = await call<{ model: SiteModel; assets: { file: string; url: string }[] }>({ action: "get", job });
     const urls = new Map(loaded.assets.map((a) => [a.file, a.url]));
-    const built = buildSiteProject(loaded.model, (file) => urls.get(file) ?? null);
+    const imageUrl = (file: string) => urls.get(file) ?? null;
+    // The browser's storage is small: leave out the oldest posts if the site does not fit, and stop if even the pages do not.
+    const room = storageRoom(window.localStorage);
+    const fit = fitToRoom(loaded.model, (m) => buildSiteProject(m, imageUrl).files, room);
+    if (!fit.fits) return { ok: false, error: fullMessage(fit.size, room) };
+    const built = buildSiteProject(fit.model, imageUrl);
     const saved = importProject(
       loaded.model.name || "Importert nettsted",
       built.files,

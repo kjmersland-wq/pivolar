@@ -12,9 +12,9 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 // --- configuration: careful defaults, nonsense falls back, nothing can be set above the platform's limits
 {
   const d = quotaConfig({});
-  assert.deepEqual(d, { aiDisabled: false, importDisabled: false, requestCapUsd: 1.5, maxOutputTokens: 16_000, timeoutMs: 240_000, sandboxMaxMs: 120 * 60_000, globalDailyUsd: null, allowUnset: false });
-  const c = quotaConfig({ AI_DISABLED: "1", IMPORT_DISABLED: "true", REQUEST_CAP_USD: "0.5", MAX_OUTPUT_TOKENS: "8000", REQUEST_TIMEOUT_MS: "60000", SANDBOX_MAX_MINUTES: "30", GLOBAL_DAILY_USD: "25", QUOTA_ALLOW_UNSET: "yes" });
-  assert.deepEqual(c, { aiDisabled: true, importDisabled: true, requestCapUsd: 0.5, maxOutputTokens: 8000, timeoutMs: 60_000, sandboxMaxMs: 30 * 60_000, globalDailyUsd: 25, allowUnset: true });
+  assert.deepEqual(d, { aiDisabled: false, importDisabled: false, requestCapUsd: 1.5, maxOutputTokens: 16_000, timeoutMs: 240_000, sandboxMaxConcurrent: 2, sandboxMaxMs: 120 * 60_000, globalDailyUsd: null, allowUnset: false });
+  const c = quotaConfig({ AI_DISABLED: "1", IMPORT_DISABLED: "true", REQUEST_CAP_USD: "0.5", MAX_OUTPUT_TOKENS: "8000", REQUEST_TIMEOUT_MS: "60000", SANDBOX_MAX_MINUTES: "30", SANDBOX_MAX_CONCURRENT: "3", GLOBAL_DAILY_USD: "25", QUOTA_ALLOW_UNSET: "yes" });
+  assert.deepEqual(c, { aiDisabled: true, importDisabled: true, requestCapUsd: 0.5, maxOutputTokens: 8000, timeoutMs: 60_000, sandboxMaxConcurrent: 3, sandboxMaxMs: 30 * 60_000, globalDailyUsd: 25, allowUnset: true });
   assert.equal(quotaConfig({ SANDBOX_MAX_MINUTES: "99999" }).sandboxMaxMs, 480 * 60_000, "a run can never be allowed more than eight hours");
   assert.equal(quotaConfig({ SANDBOX_MAX_MINUTES: "abc" }).sandboxMaxMs, 120 * 60_000);
   for (const bad of ["", "abc", "-3", "0", "NaN", "Infinity"]) assert.equal(quotaConfig({ REQUEST_CAP_USD: bad }).requestCapUsd, 1.5, `cap "${bad}" falls back`);
