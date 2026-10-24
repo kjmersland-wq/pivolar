@@ -265,7 +265,7 @@ const wpMedia = [
   { id: 10, source_url: `${SITE}/wp-content/uploads/2026/01/kontor.jpg`, mime_type: "image/jpeg", alt_text: "Kontor &amp; bord", media_details: { width: 1200, height: 800 } },
   { id: 11, source_url: `${SITE}/wp-content/uploads/2026/01/ubrukt.png`, mime_type: "image/png", alt_text: "", media_details: { width: 100, height: 100 } },
 ];
-const HOME = `<html lang="nb-NO"><head><title>Kaffebar</title><meta name="generator" content="WordPress 6.6"></head><body><header><nav><a href="/">Hjem</a><a href="/om-oss/">Om oss</a></nav></header></body></html>`;
+const HOME = `<html lang="nb-NO"><head><title>Kaffebar</title><meta name="generator" content="WordPress 6.6"><meta name="theme-color" content="#111111"><link rel="stylesheet" href="/wp-content/themes/kaffe/style.css"><link rel="stylesheet" href="https://cdn.evil.example/x.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap"></head><body><header><nav><a href="/">Hjem</a><a href="/om-oss/">Om oss</a></nav></header></body></html>`;
 
 function wpSite(options: { rest?: boolean; robots?: string; wordpress?: boolean; pages?: unknown[]; posts?: unknown[]; media?: unknown[] } = {}) {
   const { rest = true, robots = "User-agent: *\nDisallow: /privat/\n", wordpress = true, pages = wpPages, posts = wpPosts, media = wpMedia } = options;
@@ -283,6 +283,7 @@ function wpSite(options: { rest?: boolean; robots?: string; wordpress?: boolean;
     requests.push(u);
     const url = new URL(u);
     if (url.pathname === "/robots.txt") return reply(robots, {}, 200, "text/plain");
+    if (url.pathname === "/wp-content/themes/kaffe/style.css") return reply("body{font-family:Lora,serif;color:#222}:root{--wp--preset--color--primary:#b45309}", {}, 200, "text/css");
     if (url.pathname === "/") return reply(wordpress ? HOME : "<html><body>Hei</body></html>", {}, 200, "text/html");
     if (!rest) return reply("{}", {}, 404);
     if (url.pathname === "/wp-json/") return reply({ name: "Kaffebar &amp; Co", description: "Brent lokalt", namespaces: ["oembed/1.0", "wp/v2"] });
@@ -349,6 +350,11 @@ function wpSite(options: { rest?: boolean; robots?: string; wordpress?: boolean;
   const outside = model.media.find((m) => m.id.startsWith("ext-"))!;
   assert.deepEqual([outside.sourceUrl, outside.mime, outside.usedBy], [`${SITE}/wp-content/uploads/2026/03/ekstern.png`, "image/png", ["post-7"]]);
   assert.deepEqual(model.nav, [{ label: "Hjem", href: `${SITE}/` }, { label: "Om oss", href: `${SITE}/om-oss/` }]);
+  // The look is read from the site's own style sheet, and no other site is asked
+  assert.equal(model.theme?.primary, "#b45309", "the colour variable beats the theme colour");
+  assert.equal(model.theme?.bodyFont, "Lora, serif");
+  assert.deepEqual(model.theme?.fontLinks, ["https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap"]);
+  assert.ok(!site.requests.some((r) => r.includes("evil.example")), "a style sheet on another site is never fetched");
   assert.deepEqual([model.stats.pages, model.stats.posts, model.stats.media], [2, 1, 3]);
   assert.ok(model.stats.requests >= 5 && model.stats.ms > 0);
   assert.ok(site.requests.every((r) => /^https:\/\/example\.no\//.test(r)), "only this site is contacted");

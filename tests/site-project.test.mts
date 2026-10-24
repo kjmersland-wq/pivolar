@@ -182,6 +182,26 @@ const render = (location: string) => renderToString(React.createElement(StaticRo
   assert.equal(withFront.report.homeFromPosts, false);
 }
 
+{
+  // The look of the old site: colours and fonts follow into the styles, the brand and the published project
+  const themed = buildSiteProject({ ...model, theme: { primary: "#b45309", background: "#fffbf5", text: "#1c1917", headingFont: '"Playfair Display", serif', bodyFont: "Lora, serif", fontLinks: ["https://fonts.googleapis.com/css2?family=Lora&family=Playfair+Display&display=swap"] } }, url);
+  const css = themed.files["/styles.css"]!;
+  assert.match(css, /^@import url\("https:\/\/fonts\.googleapis\.com\/css2\?family=Lora/, "the fonts the old site loaded");
+  assert.match(css, /--pv-primary: #b45309;[^}]*--pv-bg: #fffbf5/);
+  assert.match(css, /font-family: Lora, serif/);
+  assert.match(css, /h1, h2, h3, h4, h5, h6 \{ font-family: "Playfair Display", serif; \}/);
+  assert.equal(JSON.parse(themed.files["/brand.json"]!).primary, "#b45309", "the share image and the theme colour use the main colour too");
+  const deployed = buildDeployableProject(themed.files, "Kaffebar");
+  assert.match(deployed["src/styles.css"]!, /^@import url\([^\n]*;\n@import "tailwindcss";/, "the font address stays in front of Tailwind's import");
+  assert.match(themed.files["/components/PageView.tsx"]!, /pageHead/);
+  // Tampered values are never written into the CSS
+  const tampered = buildSiteProject({ ...model, theme: { primary: "red;}body{display:none", bodyFont: "a}b{", fontLinks: ['https://fonts.googleapis.com/css2?family=A");}body{display:none;', "https://evil.example/x.css"] } as never }, url);
+  assert.doesNotMatch(tampered.files["/styles.css"]!, /display:none|evil\.example|@import/);
+  assert.equal(JSON.parse(tampered.files["/brand.json"]!).primary, "#0f172a");
+  // Without a theme (an older import) the plain look is used
+  assert.match(files["/styles.css"]!, /--pv-primary: #0f172a;/);
+}
+
 // --- what Pivolar's own checks say about the result
 {
   const security = securityFindings(files).filter((f) => f.severity !== "low");

@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { htmlToBlocks, navFrom } from "./clean.ts";
 import { countBlocks, imagesIn, rewriteImages, type Media, type Page, type SiteModel } from "./model.ts";
+import { extractTheme, lostFonts, stylesheetLinks, THEME_LIMITS, type Theme } from "./theme.ts";
 import { createRobots, ImportFetchError, safeFetch, type FetchLimits, type SafeResponse } from "./safe-fetch.ts";
 
 /**
@@ -150,6 +151,23 @@ async function collect(fetcher: Fetcher, allowed: (u: string) => Promise<boolean
   return { items, truncated };
 }
 
+/** The colours and fonts of the front page and of the first few style sheets it loads. A sheet that cannot be read is skipped; the theme then rests on what could be. */
+async function readTheme(fetcher: Fetcher, allowed: (u: string) => Promise<boolean>, html: string, base: string, deadline: number, now: () => number, requests: { n: number }): Promise<Theme> {
+  const sheets: string[] = [];
+  for (const href of stylesheetLinks(html, base)) {
+    if (now() > deadline) break;
+    try {
+      if (!(await allowed(href))) continue;
+      requests.n++;
+      const res = await fetcher(href, { accept: /css/i, maxBytes: THEME_LIMITS.sheetBytes, timeoutMs: 10_000 });
+      if (res.ok) sheets.push(res.text());
+    } catch (error) {
+      if (error instanceof ImportFetchError && error.code === "blocked") continue;
+    }
+  }
+  return extractTheme(html, sheets);
+}
+
 /** A resized picture (`name-300x200.jpg`) is the original (`name.jpg`) when the original is a known file. */
 export function originalOf(src: string, known: Set<string>): string {
   if (known.has(src)) return src;
@@ -271,12 +289,21 @@ export async function fetchWordPress(input: string, probe: Probe, deps: Deps = {
 
   // The menu and the language come from the front page. The API does not give menus without a login.
   let nav: SiteModel["nav"] = [];
+  let theme: Theme | undefined;
   try {
     requests.n++;
     const home = await fetcher(`${base}/`, { accept: /html/i, maxBytes: IMPORT_LIMITS.htmlBytes });
-    if (home.ok) nav = navFrom(home.text(), `${base}/`);
+    if (home.ok) {
+      const html = home.text();
+      nav = navFrom(html, `${base}/`);
+      theme = await readTheme(fetcher, allowed, html, base, deadline, now, requests);
+    }
   } catch {
     warnings.push("Fikk ikke hentet menyen fra forsiden.");
+  }
+  if (theme) {
+    const lost = lostFonts(theme);
+    if (lost.length) warnings.push(`Skrifttypene ${lost.join(", ")} lastes fra det gamle nettstedet og følger ikke med. Nettstedet bruker en lignende i stedet.`);
   }
   if (nav.length === 0) warnings.push("Fant ingen meny. Den må lages for hånd.");
 
@@ -297,6 +324,7 @@ export async function fetchWordPress(input: string, probe: Probe, deps: Deps = {
     description: probe.description,
     language: probe.language,
     nav,
+    ...(theme ? { theme } : {}),
     pages,
     media: allMedia,
     plugins,

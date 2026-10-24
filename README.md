@@ -180,3 +180,12 @@ Et importert nettsted tegnes av en ruter i nettleseren, så en søkemotor som ik
 - Nettleseren tar over den ferdige siden (`hydrateRoot`) når den hører til adressen, og tegner fra bunnen ellers (ukjent adresse, gammel kopi). Vertene åpner derfor fortsatt nettstedet på ukjente adresser.
 - Adressene kommer fra et annet nettsted. Hver blir sjekket før noe skrives: ingen `..`, skråstrek eller ugyldig koding i en mappe, ingenting under `assets`, `images` eller `api`, og filen må ligge i byggemappen. Tekst fra det gamle nettstedet escapes og leses aldri som mønster.
 - Prosjekter som ikke er importert bygges som før.
+
+### Utseendet fra det gamle nettstedet
+
+Importen leser hovedfargen, sidefargene og skrifttypene fra det gamle nettstedets egen kode, uten AI: `theme-color`, fargevariablene i temaet (`--wp--preset--color--primary` og lignende, ikke WordPress' standardpalett), `body`- og `h1`-reglene, og de tre første stilarkene fra nettstedets eget domene (med robots.txt og de vanlige grensene).
+
+- Verdiene blir bare farger og vanlige skriftnavn. Alt annet (`url(...)`, `}`, gradienter, variabler som ikke lar seg løse) kastes, og sjekkes på nytt når prosjektet bygges.
+- Den faste malen er laget for lyse sider. Hovedfargen mørknes til den kan leses som lenke (kontrast minst 4,5), tekstfargen må ha kontrast minst 7, og et mørkt nettsted beholder hovedfargen men får lys bakgrunn.
+- Google Fonts-adressene følger med som `@import`. Skrifttyper som lastes fra det gamle nettstedet selv kan ikke følge med, og står som advarsel.
+- Hovedfargen brukes også i `brand.json`, så delingsbildet og `theme-color` passer.

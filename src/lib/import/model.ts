@@ -1,3 +1,4 @@
+import type { Theme } from "./theme.ts";
 /**
  * What an import produces, whatever the website was built with. Content is cut into typed blocks
  * and kept as data; nothing here is code. The AI step later only has to make components that show
@@ -70,6 +71,8 @@ export type SiteModel = {
   description: string;
   language: string | null;
   nav: NavItem[];
+  /** Colours and fonts read from the old site's own code. Missing on imports made before this was read. */
+  theme?: Theme;
   pages: Page[];
   media: Media[];
   /** Plugins and builders found anywhere, with the number of pages each was seen on. */

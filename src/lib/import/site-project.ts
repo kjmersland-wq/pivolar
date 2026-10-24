@@ -1,5 +1,6 @@
 import type { Block, Page, SiteModel } from "./model.ts";
 import { HEAD_MODULE } from "../publish/prerender.ts";
+import { googleFamilies, isFontLink, resolveTokens, type Tokens } from "./theme.ts";
 
 /**
  * Turns an imported site into a Pivolar project, with fixed templates and no AI: the content stays
@@ -206,7 +207,7 @@ function One({ block }: { block: Block }) {
         </blockquote>
       );
     case "button": {
-      const classes = "inline-block rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700";
+      const classes = "pv-button inline-block rounded-lg px-5 py-2.5 text-sm font-medium";
       return block.href.startsWith("/") ? (
         <Link to={block.href} className={classes}>
           {block.label}
@@ -304,7 +305,7 @@ export function Layout({ children }: { children: ReactNode }) {
     if (site.language) document.documentElement.lang = site.language;
   }, []);
   return (
-    <div className="flex min-h-screen flex-col bg-white text-slate-800">
+    <div className="pv-page flex min-h-screen flex-col">
       <header className="border-b border-slate-200">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-5 py-4">
           <Link to="/" className="text-lg font-semibold tracking-tight">
@@ -442,9 +443,22 @@ export default function App() {
 }
 `;
 
-const STYLES = `html, body, #root { margin: 0; min-height: 100%; }
-body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-`;
+/** The look of the old site as CSS variables, so the fixed layout carries its colours and fonts. */
+function stylesFor(tokens: Tokens, fontLinks: string[]): string {
+  return [
+    ...fontLinks.map((href) => `@import url("${href}");`),
+    `:root { --pv-primary: ${tokens.primary}; --pv-on-primary: ${tokens.onPrimary}; --pv-bg: ${tokens.background}; --pv-text: ${tokens.text}; }`,
+    "html, body, #root { margin: 0; min-height: 100%; }",
+    `body { background: var(--pv-bg); color: var(--pv-text); font-family: ${tokens.bodyFont}; -webkit-font-smoothing: antialiased; }`,
+    ...(tokens.headingFont ? [`h1, h2, h3, h4, h5, h6 { font-family: ${tokens.headingFont}; }`] : []),
+    ".pv-page { background: var(--pv-bg); color: var(--pv-text); }",
+    "main a { color: var(--pv-primary); text-decoration: underline; text-underline-offset: 2px; }",
+    ".pv-button, main a.pv-button { background: var(--pv-primary); color: var(--pv-on-primary); text-decoration: none; }",
+    "a.pv-button:hover { filter: brightness(1.12); }",
+    "",
+  ].join("\n");
+}
+
 
 // --- links and pictures that point back at the old site
 
@@ -552,9 +566,11 @@ export function buildSiteProject(model: SiteModel, imageUrl: (file: string) => s
   if (!nav.some((n) => n.href === "/")) nav.unshift({ label: "Forside", href: "/" });
   const site = { name: model.name || "Nettsted", description: model.description, language: model.language, nav };
 
+  const tokens = resolveTokens(model.theme);
+  const fontLinks = (model.theme?.fontLinks ?? []).filter((l) => isFontLink(l) && googleFamilies([l]).length > 0).slice(0, 2);
   const files: Files = {
     "/App.tsx": APP,
-    "/styles.css": STYLES,
+    "/styles.css": stylesFor(tokens, fontLinks),
     "/lib/types.ts": TYPES,
     "/lib/inline.tsx": INLINE,
     "/lib/head.ts": HEAD_MODULE,
@@ -572,7 +588,7 @@ export function buildSiteProject(model: SiteModel, imageUrl: (file: string) => s
       `export const pages: PageData[] = [${modules.map((m) => m.name.replace(/-/g, "_").replace(/^(\d)/, "_$1")).join(", ")}];`,
       "",
     ].join("\n"),
-    "/brand.json": JSON.stringify({ name: site.name, tagline: site.description.slice(0, 120), description: site.description.slice(0, 200) || site.name, primary: "#0f172a", secondary: "#475569", ogStyle: "editorial" }, null, 2),
+    "/brand.json": JSON.stringify({ name: site.name, tagline: site.description.slice(0, 120), description: site.description.slice(0, 200) || site.name, primary: tokens.primary, secondary: "#475569", ogStyle: "editorial" }, null, 2),
     "/IMPORT.md": importNotes(model, model.pages, model.media.filter((m) => m.stored).length),
   };
   for (const m of modules) files[`/content/pages/${m.name}.ts`] = `import type { PageData } from "../../lib/types";\n\nconst page: PageData = ${JSON.stringify(m.data)};\n\nexport default page;\n`;
