@@ -25,6 +25,8 @@ type Body = {
   targets?: { github?: boolean; vercel?: boolean };
   /** Connector keys for the site's server functions. Only the names in ENV_NAMES are used; they go to Vercel, never to GitHub. */
   env?: Record<string, string>;
+  /** The Pivolar project id. When set, the site counts page views (without cookies) and reports them to Pivolar. */
+  analyticsProject?: string;
   /** Builds the project and reports what it would do, without touching GitHub or Vercel. */
   dryRun?: boolean;
 };
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
         if (Object.keys(files).length === 0) throw new Error("Prosjektet har ingen filer å publisere.");
         // Pictures generated in Pivolar are copied into the project, so the site does not depend on Pivolar's storage.
         const bundled = await bundleStorageImages(files, process.env.NEXT_PUBLIC_SUPABASE_URL);
-        const project: Record<string, PublishFile> = { ...buildDeployableProject(bundled.files, title, { icons: true }), ...bundled.images };
+        const project: Record<string, PublishFile> = { ...buildDeployableProject(bundled.files, title, { icons: true, ...(body.analyticsProject ? { analytics: { origin: new URL(request.url).origin, projectId: body.analyticsProject } } : {}) }), ...bundled.images };
         // The share image is drawn from /brand.json and the logo. Without them it uses the title and default colours.
         const og = await renderOgImage(readBrand(files, title));
         project["public/og.png"] = { base64: Buffer.from(og).toString("base64") };

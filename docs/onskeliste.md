@@ -6,7 +6,7 @@ Ting som er bestilt men ikke bygget. Koblingene legges inn i `src/lib/connectors
 - **Sikkerhetspakke:** dyp skanning (flere sjekker enn i dag: tilgangsregler, avhengigheter med kjente feil, hemmeligheter i historikken) og en oversikt over pakker med kjente sårbarheter.
 - **Koblingspakke (Connectors):** søkbar liste med kategorier, av/på per prosjekt og egne koblinger («Add custom»).
 
-## Analyse (egen side som i Lovable)
+## Analyse (bygget første versjon: knappen Analyse; mangler «Kjør annonser» og SEO-skanning med oppfølging)
 Besøk siste 7 dager som kurve, fordelt på kilde (SEO og AI-søk, SoMe, henvisninger, direkte, annonser), mest besøkte sider, land og enheter, og antall som er inne akkurat nå. Krever egen telling på de publiserte sidene (en liten /api/-funksjon og lagring, uten cookies, slik at samtykkebanner ikke trengs), og lenker fra SEO-fanen (hvilke søkemotorer som sender besøk). Google Analytics-koblingen er en enklere start.
 
 ## Koblinger det er ønsket å ha

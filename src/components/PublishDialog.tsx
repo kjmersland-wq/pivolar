@@ -122,6 +122,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
   const [config, setConfig] = useState<Config | null>(null);
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(true);
+  const [analytics, setAnalytics] = useState(true);
   const [steps, setSteps] = useState<Steps>(IDLE);
   const [running, setRunning] = useState(false);
   const [last, setLast] = useState<PublishInfo | null>(null);
@@ -151,7 +152,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
       const response = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: slug, files, isPrivate, env: envFor(loadConnectors(projectId)) }),
+        body: JSON.stringify({ name: slug, files, isPrivate, env: envFor(loadConnectors(projectId)), ...(analytics ? { analyticsProject: projectId } : {}) }),
       });
       if (!response.ok || !response.body) throw new Error("Publisering startet ikke.");
       const reader = response.body.getReader();
@@ -250,6 +251,13 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                 <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} disabled={running || Boolean(last?.githubUrl)} className="size-4 accent-[var(--accent)]" />
                 <Lock className="size-3.5" />
                 Privat GitHub-repo{last?.githubUrl ? " (kan ikke endres etter første publisering)" : ""}
+              </label>
+              <label className="flex cursor-pointer items-start gap-2.5 text-[13px] text-muted">
+                <input type="checkbox" checked={analytics} onChange={(e) => setAnalytics(e.target.checked)} disabled={running} className="mt-0.5 size-4 accent-[var(--accent)]" />
+                <span>
+                  Tell besøk (uten cookies)
+                  <span className="mt-0.5 block text-[12px] text-faint">Siden sender sti, kilde, land og enhet til Pivolar. Ingen IP-adresser lagres, og ingenting sendes hvis nettleseren ber om «Do Not Track». Se tallene under Analyse.</span>
+                </span>
               </label>
 
               {(running || finished) && (

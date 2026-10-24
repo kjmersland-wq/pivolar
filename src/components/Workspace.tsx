@@ -5,9 +5,10 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useParams, useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Plug, Rocket, ScanSearch, ShieldCheck, Smartphone, Tablet } from "lucide-react";
+import { BarChart3, ChevronLeft, Code2, Download, Eye, LayoutTemplate, Maximize2, Monitor, GitPullRequest, MousePointerClick, Plug, Rocket, ScanSearch, ShieldCheck, Smartphone, Tablet } from "lucide-react";
 import { BudgetDialog } from "@/components/BudgetDialog";
 import { CheckDialog } from "@/components/CheckDialog";
+import { AnalyticsDialog } from "@/components/AnalyticsDialog";
 import { ConnectorsDialog } from "@/components/ConnectorsDialog";
 import { LoopDialog } from "@/components/LoopDialog";
 import { PullRequestDialog } from "@/components/PullRequestDialog";
@@ -71,6 +72,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
   const [composeOpen, setComposeOpen] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
   const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
   // Set when the project was imported from GitHub; changes can then be sent back as a pull request.
   const [github] = useState(() => loadImportInfo(id)?.github ?? null);
@@ -320,6 +322,15 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           </button>
           <button
             type="button"
+            onClick={() => setAnalyticsOpen(true)}
+            title="Se besøk på den publiserte siden"
+            className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
+          >
+            <BarChart3 className="size-3.5" />
+            <span className="hidden md:inline">Analyse</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setExportOpen(true)}
             title="Last ned hele prosjektet som ZIP"
             className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-muted transition hover:text-fg"
@@ -429,6 +440,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           void guarded({ text });
         }}
       />
+      <AnalyticsDialog open={analyticsOpen} projectId={id} onClose={() => setAnalyticsOpen(false)} />
       <ConnectorsDialog
         open={connectorsOpen}
         projectId={id}

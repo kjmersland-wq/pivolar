@@ -6,6 +6,8 @@ import { authConfigured, isOwner } from "@/lib/auth";
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname.startsWith("/login") || pathname.startsWith("/api/login")) return NextResponse.next();
+  // Published sites report page views here. The route validates everything itself and the database accepts nothing but record_hit.
+  if (pathname === "/api/collect") return NextResponse.next();
 
   let response = NextResponse.next({ request });
 

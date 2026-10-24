@@ -1,3 +1,4 @@
+import { trackingSnippet } from "../analytics/snippet.ts";
 import { PROTECTED_PATHS, SANDBOX_DEPENDENCIES, type FileMap } from "../files.ts";
 import { metaTags, readBrand, type Brand } from "./brand.ts";
 
@@ -252,9 +253,10 @@ const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ "&": "&am
  * builds on Vercel. Paths move under src/, the sandbox-only files are left out, and Tailwind is
  * installed properly (the preview loads it from a CDN, a real build must not).
  */
-export function buildDeployableProject(files: FileMap, title: string, options: { icons?: boolean } = {}): Record<string, string> {
+export function buildDeployableProject(files: FileMap, title: string, options: { icons?: boolean; analytics?: { origin: string; projectId: string } } = {}): Record<string, string> {
   const slug = slugify(title);
   const brand = readBrand(files, title);
+  const counter = options.analytics ? trackingSnippet(options.analytics.origin, options.analytics.projectId) : "";
   const out: Record<string, string> = {
     ".github/workflows/ci.yml": CI_WORKFLOW,
     "package.json": PACKAGE_JSON(slug),
@@ -268,7 +270,7 @@ export function buildDeployableProject(files: FileMap, title: string, options: {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(brand.name || title)}</title>
     ${metaTags(brand, title)}
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="/manifest.webmanifest" />${counter ? `\n    ${counter}` : ""}
   </head>
   <body>
     <div id="root"></div>
