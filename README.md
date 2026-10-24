@@ -270,3 +270,5 @@ I Mer-panelet (seksjonen «Kunnskap») skriver eieren varige regler for AI-en i 
 - **Lagring:** som én skjult prosjektfil (`/KNOWLEDGE.md`), satt av eierens egne redigeringer helt i starten av samtalen. Den synker til kontoen som resten av prosjektet uten ny migrasjon, og å gå tilbake i samtalen tar den aldri bort.
 - **Beskyttet:** AI-en kan ikke skrive, endre eller slette filen, den vises ikke i filkart eller kodevisning, og den publiseres og eksporteres aldri.
 - **Bruk:** hver melding til AI-en får instruksene som en egen del av systemprompten, i en avgrenset blokk. Teksten renses (kontrolltegn og tagger som kunne lukket blokken fjernes). De gir ingen nye verktøy og kan ikke oppheve reglene ellers, og en melding fra eieren som strider mot dem, går foran.
+
+Prompt-hjelperen kan også lagre språk, tone, fakta om virksomheten og aksentfargen som faste regler (Kunnskap) for prosjektet. Det er en avkrysning under bestillingen, på som standard, og den viser reglene som lagres. De settes på prosjektet idet det opprettes, og gjelder i alle meldinger. Et hurtigforslag på forsiden arver ikke regler du valgte tidligere.

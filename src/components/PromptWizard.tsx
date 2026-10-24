@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Check, Loader2, Sparkles, Wand2, X } from "lucide-react";
-import { buildPrompt, defaultsFor, FEATURES, GOALS, KINDS, LIMITS, MOODS, promptCheck, SECTIONS, type FeatureKey, type GoalId, type ImagesId, type KindId, type MoodId, type PromptSpec, type SectionKey } from "@/lib/prompt/builder";
+import { buildPrompt, defaultsFor, FEATURES, knowledgeFromSpec, GOALS, KINDS, LIMITS, MOODS, promptCheck, SECTIONS, type FeatureKey, type GoalId, type ImagesId, type KindId, type MoodId, type PromptSpec, type SectionKey } from "@/lib/prompt/builder";
 import { cn } from "@/lib/utils";
 
 const SWATCHES = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#f43f5e", "#a855f7", "#14b8a6", "#b45309"];
@@ -34,7 +34,7 @@ const input = "w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 t
  * on the right is plain code's work and can be edited freely. The AI step is optional and only
  * sharpens the wording; the owner always sees the result before anything is sent.
  */
-export function PromptWizard({ open, onClose, onUse, initialAbout = "" }: { open: boolean; onClose: () => void; onUse: (text: string, start: boolean) => void; initialAbout?: string }) {
+export function PromptWizard({ open, onClose, onUse, initialAbout = "" }: { open: boolean; onClose: () => void; onUse: (text: string, start: boolean, knowledge: string) => void; initialAbout?: string }) {
   const [spec, setSpec] = useState<PromptSpec>(() => defaultsFor("landing"));
   const built = useMemo(() => buildPrompt(spec), [spec]);
   const check = useMemo(() => promptCheck(spec), [spec]);
@@ -42,6 +42,8 @@ export function PromptWizard({ open, onClose, onUse, initialAbout = "" }: { open
   const [text, setText] = useState(built);
   const [edited, setEdited] = useState(false);
   const [improving, setImproving] = useState(false);
+  const [keep, setKeep] = useState(true);
+  const rules = useMemo(() => knowledgeFromSpec(spec), [spec]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -230,6 +232,16 @@ export function PromptWizard({ open, onClose, onUse, initialAbout = "" }: { open
                   </p>
                 )}
                 {error && <p className="text-[12.5px] text-red-400">{error}</p>}
+                {rules && (
+                  <details className="rounded-xl border border-line bg-surface-2 p-3 text-[12.5px]">
+                    <summary className="flex cursor-pointer list-none items-center gap-2.5">
+                      <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} onClick={(e) => e.stopPropagation()} aria-label="Lagre som faste regler" className="size-4 accent-[var(--accent)]" />
+                      <span>Lagre språk, tone, fakta og farge som faste regler for prosjektet (Kunnskap)</span>
+                    </summary>
+                    <pre className="mt-2 whitespace-pre-wrap font-sans text-muted">{rules}</pre>
+                    <p className="mt-2 text-faint">Reglene gjelder i alle meldinger i prosjektet, ikke bare den første, og kan endres senere i Mer-panelet.</p>
+                  </details>
+                )}
                 {edited && (
                   <button
                     type="button"
@@ -247,10 +259,10 @@ export function PromptWizard({ open, onClose, onUse, initialAbout = "" }: { open
                     {improving ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                     Skjerp med AI (valgfritt)
                   </button>
-                  <button type="button" onClick={() => onUse(text, false)} disabled={text.trim().length < 20} className="rounded-xl border border-line px-3.5 py-2.5 text-[13px] transition enabled:hover:border-line-strong disabled:opacity-50">
+                  <button type="button" onClick={() => onUse(text, false, keep ? rules : "")} disabled={text.trim().length < 20} className="rounded-xl border border-line px-3.5 py-2.5 text-[13px] transition enabled:hover:border-line-strong disabled:opacity-50">
                     Legg i tekstfeltet
                   </button>
-                  <button type="button" onClick={() => onUse(text, true)} disabled={text.trim().length < 20} className="bg-brand ml-auto rounded-xl px-5 py-2.5 text-[13.5px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-50">
+                  <button type="button" onClick={() => onUse(text, true, keep ? rules : "")} disabled={text.trim().length < 20} className="bg-brand ml-auto rounded-xl px-5 py-2.5 text-[13.5px] font-medium text-white transition enabled:hover:brightness-110 disabled:opacity-50">
                     Bygg nå
                   </button>
                 </div>

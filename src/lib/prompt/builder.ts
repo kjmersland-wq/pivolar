@@ -5,6 +5,8 @@
  * can sharpen the text afterwards (see /api/prompt/improve), but the choices stand on their own.
  */
 
+import { cleanKnowledge } from "../knowledge.ts";
+
 export type KindId = "landing" | "shop" | "portfolio" | "restaurant" | "company" | "club" | "blog" | "booking" | "app";
 export type GoalId = "contact" | "buy" | "book" | "signup" | "call" | "visit" | "read" | "use";
 export type MoodId = "warm" | "dark" | "light" | "playful" | "serious";
@@ -169,6 +171,36 @@ export function buildPrompt(input: PromptSpec): string {
   if (extra) blocks.push(`Egne ønsker:\n${extra}`);
 
   return blocks.join("\n\n").slice(0, LIMITS.prompt);
+}
+
+const TONES: Record<MoodId, string> = {
+  warm: "Tonen er varm og personlig, med korte setninger og små detaljer som gjør teksten levende.",
+  dark: "Tonen er rolig, moderne og selvsikker. Korte, presise setninger uten overdrivelser.",
+  light: "Tonen er enkel og vennlig. Korte setninger, ingen floskler.",
+  playful: "Tonen er leken og uformell. Bruk «du», gjerne litt humor, men hold teksten ryddig.",
+  serious: "Tonen er saklig og tillitsvekkende. Unngå utropstegn, slang og store løfter.",
+};
+
+/**
+ * The part of the choices that should hold for the whole project, not just the first message: language,
+ * tone, who the business is and who it is for, and the accent colour. Written as the owner's standing
+ * instructions (see lib/knowledge.ts). Returns an empty text when nothing has been filled in.
+ */
+export function knowledgeFromSpec(input: PromptSpec): string {
+  const name = clean(input.name, LIMITS.name);
+  const about = clean(input.about, LIMITS.about);
+  const audience = clean(input.audience, LIMITS.audience);
+  const color = HEX.test(input.color.trim()) ? input.color.trim().toLowerCase() : "";
+  if (!name && !about && !audience && !color) return "";
+  const lines: string[] = [];
+  if (name) lines.push(`Virksomheten eller siden heter «${name}».`);
+  if (about) lines.push(about);
+  if (audience) lines.push(`Målgruppen er: ${audience}.`);
+  lines.push(input.language === "en" ? "Write all text in the app in English." : "Skriv all tekst i appen og alle svar på norsk (bokmål).");
+  lines.push((TONES[input.mood] ?? TONES.light));
+  if (color) lines.push(`Aksentfargen er ${color}. Bruk den sparsomt, og ikke innfør flere aksentfarger uten at jeg ber om det.`);
+  lines.push("Der fakta mangler (priser, adresse, telefon, navn, tall), bruk en tydelig plassholder i hakeparentes og ikke finn på noe.");
+  return cleanKnowledge(lines.join("\n"));
 }
 
 /** What is still missing for a good order, in words the owner can act on. Nothing here blocks sending. */

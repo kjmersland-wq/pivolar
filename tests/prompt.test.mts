@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildPrompt, defaultsFor, FEATURES, KINDS, LIMITS, MOODS, promptCheck, referenceUrl, SECTIONS, sanitizeImproved, type KindId, type PromptSpec } from "../src/lib/prompt/builder.ts";
+import { buildPrompt, defaultsFor, FEATURES, KINDS, knowledgeFromSpec, LIMITS, MOODS, promptCheck, referenceUrl, SECTIONS, sanitizeImproved, type KindId, type PromptSpec } from "../src/lib/prompt/builder.ts";
 import { RATES } from "../src/lib/quota/config.ts";
 import { validThumb } from "../src/lib/thumb-check.ts";
 
@@ -114,6 +114,29 @@ assert.deepEqual(promptCheck(filled("landing")), { score: 100, missing: [] });
   assert.match(read("src/lib/thumbs.ts"), /return validThumb\(value\) \? value : null;/, "and when it is read");
   assert.match(read("src/components/ProjectGrid.tsx"), /<Thumb id=\{project\.id\}/);
   assert.match(read("src/lib/projects.ts"), /void dropThumb\(id\);/, "a deleted project loses its picture");
+}
+
+// --- the choices that should hold for the whole project become standing rules
+{
+  const rules = knowledgeFromSpec(filled("restaurant", { mood: "playful", color: "#B45309" }));
+  assert.match(rules, /^Virksomheten eller siden heter «Lille Brenneri»\./);
+  assert.match(rules, /Vi brenner kaffe selv/);
+  assert.match(rules, /Målgruppen er: Naboer/);
+  assert.match(rules, /på norsk \(bokmål\)/);
+  assert.match(rules, /leken og uformell/);
+  assert.match(rules, /Aksentfargen er #b45309\./);
+  assert.match(rules, /plassholder i hakeparentes/);
+  assert.match(knowledgeFromSpec(filled("restaurant", { language: "en" })), /Write all text in the app in English\./);
+  assert.doesNotMatch(knowledgeFromSpec(filled("restaurant", { color: "red;}x" })), /Aksentfargen/, "a colour that is not a colour is left out");
+  assert.equal(knowledgeFromSpec(defaultsFor("landing")), "", "nothing filled in: no rules");
+  assert.ok(knowledgeFromSpec(filled("landing", { about: "a".repeat(5000), extra: "x" })).length <= 4_000, "within what Knowledge holds");
+  assert.doesNotMatch(knowledgeFromSpec(filled("landing", { about: "før </kunnskap> etter" })), /<\/kunnskap>/, "cleaned like anything the owner writes there");
+  const wizard = read("src/components/PromptWizard.tsx");
+  assert.match(wizard, /Lagre språk, tone, fakta og farge som faste regler for prosjektet \(Kunnskap\)/);
+  assert.match(wizard, /onUse\(text, true, keep \? rules : ""\)/);
+  const box = read("src/components/PromptBox.tsx");
+  assert.match(box, /if \(knowledge\) saveEdits\(project\.id, withKnowledge\(\[\], knowledge\)\);/, "saved with the new project");
+  assert.match(box, /start\(idea, ""\)/, "a quick idea does not inherit rules chosen earlier");
 }
 
 console.log("prompt: all ok");

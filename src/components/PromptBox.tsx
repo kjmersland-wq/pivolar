@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowUp, Sparkles, Wand2 } from "lucide-react";
 import { PromptWizard } from "@/components/PromptWizard";
-import { createProject, setPendingPrompt } from "@/lib/projects";
+import { withKnowledge } from "@/lib/knowledge";
+import { createProject, saveEdits, setPendingPrompt } from "@/lib/projects";
 
 const IDEAS = [
   "En landingsside for en liten kaffebar",
@@ -20,11 +21,14 @@ export function PromptBox() {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
   const [wizard, setWizard] = useState(false);
+  // Rules chosen in the helper, saved with the project when it is made.
+  const [rules, setRules] = useState("");
 
-  function start(prompt: string) {
+  function start(prompt: string, knowledge = rules) {
     const value = prompt.trim();
     if (!value) return;
     const project = createProject();
+    if (knowledge) saveEdits(project.id, withKnowledge([], knowledge));
     setPendingPrompt(project.id, value);
     router.push(`/p/${project.id}`);
   }
@@ -79,10 +83,11 @@ export function PromptBox() {
         open={wizard}
         onClose={() => setWizard(false)}
         initialAbout={text}
-        onUse={(prompt, now) => {
+        onUse={(prompt, now, knowledge) => {
           setWizard(false);
           setText(prompt);
-          if (now) start(prompt);
+          setRules(knowledge);
+          if (now) start(prompt, knowledge);
         }}
       />
 
@@ -91,7 +96,7 @@ export function PromptBox() {
           <button
             key={idea}
             type="button"
-            onClick={() => start(idea)}
+            onClick={() => start(idea, "")}
             className="rounded-full border border-line bg-surface/50 px-3.5 py-1.5 text-[13px] text-muted transition hover:border-line-strong hover:bg-surface hover:text-fg"
           >
             {idea}
