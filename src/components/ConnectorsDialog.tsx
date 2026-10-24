@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ExternalLink, Plug, Search, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, Plug, Search, Sparkles, X } from "lucide-react";
 import { CATEGORIES, CATEGORY_LABELS, CONNECTORS, KIND_LABELS, missingFields, publicValues, searchConnectors, validate, type Category, type Connector } from "@/lib/connectors";
 import { loadConnectors, removeConnector, saveConnector, type Saved } from "@/lib/connectors/store";
 import type { FileMap } from "@/lib/files";
@@ -35,6 +35,8 @@ export function ConnectorsDialog({
   const [chosen, setChosen] = useState<Connector | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [idea, setIdea] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
   const [google, setGoogle] = useState<{ configured: boolean; connected: { service: string; email: string | null }[]; error?: string } | null>(null);
 
   // Which Google services are signed in for this project; looked up when a connector that needs one is opened.
@@ -70,6 +72,22 @@ export function ConnectorsDialog({
     setChosen(connector);
     setError("");
     setValues(connector ? (current[connector.id] ?? {}) : {});
+  }
+
+  /** Asks the AI to fill in a field from a sentence about the app. The owner reads and can change the result before anything is made. */
+  async function suggest(field: { key: string; suggest?: { endpoint: string } }) {
+    if (!field.suggest) return;
+    setError("");
+    setSuggesting(true);
+    try {
+      const response = await fetch(field.suggest.endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ description: idea }) });
+      const data = (await response.json().catch(() => ({}))) as { tables?: string; error?: string };
+      if (!response.ok || !data.tables) setError(data.error ?? "Fikk ikke noe forslag.");
+      else setValues((current) => ({ ...current, [field.key]: data.tables! }));
+    } catch {
+      setError("Fikk ikke kontakt med serveren.");
+    }
+    setSuggesting(false);
   }
 
   function add() {
@@ -183,6 +201,15 @@ export function ConnectorsDialog({
                       />
                     )}
                     {field.help && <span className="mt-1 block text-faint">{field.help}</span>}
+                    {field.suggest && (
+                      <span className="mt-2 flex gap-2">
+                        <input value={idea} onChange={(e) => setIdea(e.target.value)} maxLength={600} placeholder={field.suggest.placeholder} aria-label="Beskrivelse av appen" className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[13px] text-fg outline-none focus:border-line-strong" />
+                        <button type="button" onClick={() => void suggest(field)} disabled={suggesting || idea.trim().length < 5} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] text-fg transition hover:border-line-strong disabled:opacity-50">
+                          {suggesting ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                          {field.suggest.label}
+                        </button>
+                      </span>
+                    )}
                   </label>
                 ))}
                 <a href={chosen.docs} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] text-muted transition hover:text-fg">

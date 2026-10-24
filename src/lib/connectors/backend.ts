@@ -43,6 +43,7 @@ export const BACKEND: Connector[] = [
         key: "tables",
         label: "Tabeller",
         multiline: true,
+        suggest: { endpoint: "/api/backend/suggest", label: "Foreslå tabeller med AI", placeholder: "Hva skal appen gjøre? For eksempel: en oppgaveliste der hver bruker har sine egne oppgaver" },
         placeholder: "oppgaver: tittel text!, ferdig ja/nei, frist dato\nprodukter [offentlig]: navn text!, pris tall",
         help: "Én tabell per linje: navn, så kolonner med type (tekst, tall, heltall, ja/nei, dato, tidspunkt). ! betyr påkrevd. [offentlig] betyr at alle kan lese, men bare eieren av raden kan endre.",
         check: (value) => {

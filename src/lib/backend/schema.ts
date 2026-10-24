@@ -161,3 +161,32 @@ export function typesFile(tables: Table[]): string {
   const map = tables.map((t) => `  ${t.name}: { row: ${pascal(t.name)}Row; insert: Partial<Omit<${pascal(t.name)}Row, "id" | "owner_id" | "created_at">> };`);
   return `// Raddata fra supabase/schema.sql. Endrer du tabellene, lag filen på nytt i koblingen.\n${rows.join("\n\n")}${rows.length ? "\n\n" : ""}export type Tables = {\n${map.join("\n")}\n};\n\nexport type TableName = keyof Tables;\n`;
 }
+
+const TYPE_WORDS: Record<ColumnType, string> = { text: "tekst", int: "heltall", number: "tall", bool: "ja/nei", date: "dato", datetime: "tidspunkt" };
+
+/** Tables written back as the lines the owner would type, so a suggestion can be read, changed and checked like anything typed by hand. */
+export function tablesToText(tables: Table[]): string {
+  return tables.map((t) => `${t.name}${t.publicRead ? " [offentlig]" : ""}: ${t.columns.map((c) => `${c.name} ${TYPE_WORDS[c.type]}${c.required ? "!" : ""}`).join(", ")}`).join("\n");
+}
+
+/**
+ * Cuts a suggestion (from the AI) down to tables that pass the same checks as typed ones: each table
+ * is written as a line and read again, and a table that does not pass is left out.
+ */
+export function acceptSuggestion(raw: unknown): { text: string; tables: Table[] } {
+  const list = raw && typeof raw === "object" && Array.isArray((raw as { tables?: unknown }).tables) ? ((raw as { tables: unknown[] }).tables) : [];
+  const tables: Table[] = [];
+  for (const item of list.slice(0, SCHEMA_LIMITS.tables)) {
+    if (!item || typeof item !== "object") continue;
+    const t = item as { name?: unknown; publicRead?: unknown; columns?: unknown };
+    if (typeof t.name !== "string" || !Array.isArray(t.columns)) continue;
+    const columns = t.columns.slice(0, SCHEMA_LIMITS.columns).flatMap((c: unknown) => {
+      const col = c as { name?: unknown; type?: unknown; required?: unknown };
+      return typeof col?.name === "string" && typeof col.type === "string" && col.type in TYPE_WORDS ? [`${col.name.replace(/[,:\[\]#\n!]/g, " ")} ${TYPE_WORDS[col.type as ColumnType]}${col.required === true ? "!" : ""}`] : [];
+    });
+    const line = `${t.name.replace(/[,:\[\]#\n]/g, " ")}${t.publicRead === true ? " [offentlig]" : ""}: ${columns.join(", ")}`;
+    const parsed = parseSchema(line);
+    if (parsed.ok && parsed.tables[0] && !tables.some((x) => x.name === parsed.tables[0]!.name)) tables.push(parsed.tables[0]);
+  }
+  return { text: tablesToText(tables), tables };
+}

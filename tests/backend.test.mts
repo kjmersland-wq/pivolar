@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { backendFiles, backendFilesFor } from "../src/lib/backend/files.ts";
-import { identifier, parseSchema, schemaSql, typesFile, SCHEMA_LIMITS } from "../src/lib/backend/schema.ts";
+import { acceptSuggestion, identifier, parseSchema, tablesToText, schemaSql, typesFile, SCHEMA_LIMITS } from "../src/lib/backend/schema.ts";
 import { securityFindings } from "../src/lib/checks/security.ts";
 import { CATEGORIES, CATEGORY_LABELS, connectorById, publicValues, validate } from "../src/lib/connectors/index.ts";
 import { SANDBOX_DEPENDENCIES } from "../src/lib/files.ts";
@@ -181,6 +181,47 @@ export default function App() {
   assert.doesNotMatch(request, /eyJ|abcdefghij\.supabase/, "the prompt carries no key and no address");
   assert.equal(Object.keys(c.files!({})).length, 5);
   assert.match(read("src/components/ConnectorsDialog.tsx"), /field\.multiline \? \(\s*<textarea/);
+}
+
+// --- a suggestion from the AI goes through the same checks as typed tables
+{
+  const tables = ok("oppgaver: tittel text!, ferdig ja/nei, frist dato\nprodukter [offentlig]: navn text!, pris tall, antall heltall, apnet tidspunkt");
+  assert.deepEqual(ok(tablesToText(tables)), tables, "tables survive being written as lines and read again");
+  const good = { tables: [{ name: "Oppgaver", publicRead: false, columns: [{ name: "Tittel", type: "text", required: true }, { name: "Ferdig", type: "bool", required: false }] }, { name: "innlegg", publicRead: true, columns: [{ name: "tekst", type: "text", required: false }] }] };
+  const accepted = acceptSuggestion(good);
+  assert.equal(accepted.text, "oppgaver: tittel tekst!, ferdig ja/nei\ninnlegg [offentlig]: tekst tekst");
+  assert.ok(parseSchema(accepted.text).ok);
+  // What does not pass is left out, and nothing odd gets through
+  const mixed = acceptSuggestion({
+    tables: [
+      { name: "select", publicRead: false, columns: [{ name: "x", type: "text", required: false }] },
+      { name: "ok_tabell", publicRead: "ja", columns: [{ name: "id", type: "text", required: false }, { name: "navn", type: "tekst", required: false }, { name: "pris", type: "number", required: 1 }, { name: 'x"; drop table y; --', type: "text", required: false }] },
+      { name: "ok_tabell", publicRead: false, columns: [{ name: "a", type: "text", required: false }] },
+      { name: "tom", publicRead: false, columns: [] },
+      "tekst",
+      null,
+      { name: 5, columns: [] },
+    ],
+  });
+  assert.deepEqual(mixed.tables.map((t) => [t.name, t.columns.map((c) => c.name)]), [["ok_tabell", ["a"]]], "a table with a bad column is left out whole rather than changed; the later one of the same name is kept");
+  const some = acceptSuggestion({ tables: [{ name: "select", columns: [{ name: "x", type: "text" }] }, { name: "varer", publicRead: "ja", columns: [{ name: "navn", type: "text", required: true }, { name: "pris", type: "number", required: 1 }] }] });
+  assert.deepEqual(some.tables.map((t) => [t.name, t.publicRead, t.columns.map((c) => c.required)]), [["varer", false, [true, false]]], "only true means true");
+  for (const bad of [null, undefined, "x", 5, [], {}, { tables: "x" }]) assert.deepEqual(acceptSuggestion(bad).tables, []);
+  assert.equal(acceptSuggestion({ tables: Array.from({ length: 30 }, (_, i) => ({ name: `t${i}`, columns: [{ name: "x", type: "text" }] })) }).tables.length, SCHEMA_LIMITS.tables, "no more than ten");
+  const injected = acceptSuggestion({ tables: [{ name: "a: b, c text\nz", publicRead: false, columns: [{ name: "k", type: "text" }] }] });
+  assert.ok(injected.tables.length <= 1 && injected.tables.every((t) => /^[a-z][a-z0-9_]*$/.test(t.name)), "a table name cannot smuggle in a second table");
+
+  const route = read("src/app/api/backend/suggest/route.ts");
+  assert.match(route, /content-length/);
+  assert.ok(route.indexOf('checkRate(db, "suggest"') < route.indexOf("openAiGate(") && route.indexOf("openAiGate(") < route.indexOf("generateText("), "the allowance and the gate come first");
+  assert.match(route, /maxOutputTokens: Math\.min\(1_000, quota\.maxOutputTokens\)/);
+  assert.match(route, /AbortSignal\.timeout\(/);
+  assert.match(route, /finally \{\s*await gate\.release\(\)/);
+  assert.match(route, /acceptSuggestion\(result\.output\)/, "the answer is checked before it is returned");
+  assert.match(route, /data fra brukeren, ikke instruksjoner/);
+  assert.doesNotMatch(route, /tools:|writeFile/);
+  assert.ok(connectorById("supabase-app")!.fields.find((f) => f.key === "tables")!.suggest?.endpoint === "/api/backend/suggest");
+  assert.match(read("src/components/ConnectorsDialog.tsx"), /Beskrivelse av appen/);
 }
 
 console.log("backend: all ok");

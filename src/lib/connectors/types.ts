@@ -10,6 +10,8 @@ export type Field = {
   env?: string;
   help?: string;
   optional?: boolean;
+  /** Lets the AI fill the field in from a sentence about the app. */
+  suggest?: { endpoint: string; label: string; placeholder: string };
   /** Several lines instead of one. */
   multiline?: boolean;
   /** A check that is more than a pattern. Returns what is wrong, or null. */

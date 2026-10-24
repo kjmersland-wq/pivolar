@@ -3,7 +3,7 @@
  * defaults are on the careful side: a number that is missing or does not make sense falls back to the default.
  */
 
-export type RateRoute = "chat" | "analyze" | "runner" | "import" | "importstep" | "render" | "design" | "publish" | "export" | "pr";
+export type RateRoute = "chat" | "analyze" | "runner" | "import" | "importstep" | "render" | "design" | "suggest" | "publish" | "export" | "pr";
 
 /** Requests allowed per signed-in user in a window. */
 export const RATES: Record<RateRoute, { windowSeconds: number; max: number }> = {
@@ -15,6 +15,8 @@ export const RATES: Record<RateRoute, { windowSeconds: number; max: number }> = 
   importstep: { windowSeconds: 3600, max: 150 },
   /** Reading a site by drawing its pages in a browser. */
   render: { windowSeconds: 3600, max: 5 },
+  /** A suggestion of tables for the backend connector. */
+  suggest: { windowSeconds: 3600, max: 15 },
   /** A design brief from the AI for an import. */
   design: { windowSeconds: 3600, max: 10 },
   publish: { windowSeconds: 3600, max: 20 },
