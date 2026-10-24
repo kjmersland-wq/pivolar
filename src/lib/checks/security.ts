@@ -1,5 +1,6 @@
 import type { FileMap } from "../files.ts";
 import type { Finding } from "./quality.ts";
+import { moreSecurityFindings } from "./security-more.ts";
 
 /**
  * Security check: reads the project the way a reviewer would before it goes live. It looks for
@@ -176,6 +177,8 @@ export function securityFindings(files: FileMap): Finding[] {
       fix: "Legg til innlogging med Supabase Auth (e-post og passord), og vis bare brukerens egne data. Behold dagens utseende.",
     });
   }
+
+  out.push(...moreSecurityFindings(files));
 
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity]);

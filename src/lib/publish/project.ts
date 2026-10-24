@@ -47,6 +47,29 @@ const PACKAGE_JSON = (name: string) =>
     2,
   ) + "\n";
 
+/**
+ * Headers every page and function answers with. A Content-Security-Policy is left out on purpose:
+ * it has to name every script and frame the site loads (payments, analytics, embeds), so a general one would break them.
+ */
+export const SECURITY_HEADERS =
+  JSON.stringify(
+    {
+      headers: [
+        {
+          source: "/(.*)",
+          headers: [
+            { key: "X-Content-Type-Options", value: "nosniff" },
+            { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+            { key: "X-Frame-Options", value: "SAMEORIGIN" },
+            { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          ],
+        },
+      ],
+    },
+    null,
+    2,
+  ) + "\n";
+
 const VITE_CONFIG = `import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -237,6 +260,7 @@ export function buildDeployableProject(files: FileMap, title: string, options: {
     "package.json": PACKAGE_JSON(slug),
     "vite.config.ts": VITE_CONFIG,
     "tsconfig.json": TSCONFIG,
+    "vercel.json": SECURITY_HEADERS,
     "index.html": `<!doctype html>
 <html lang="nb">
   <head>

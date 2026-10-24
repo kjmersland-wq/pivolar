@@ -422,6 +422,12 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
           modeRef.current = "build";
           void guarded({ text });
         }}
+        onReview={(text) => {
+          // A review only reports, so it runs in chat mode where no file can change.
+          setMode("chat");
+          modeRef.current = "chat";
+          void guarded({ text });
+        }}
       />
       <ConnectorsDialog
         open={connectorsOpen}
