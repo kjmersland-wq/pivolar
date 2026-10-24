@@ -44,4 +44,10 @@ assert.equal(originLabel({ source: "zip", fileName: "a.zip" }), "Importert fra Z
   assert.doesNotMatch(copy, /publishKey|savePublish/, "the copy does not inherit the original's publishing");
 }
 
+// --- the page that reads the project id from the address must wait for it in Suspense, or the production build fails
+{
+  const page = read("src/app/p/[id]/full/page.tsx");
+  assert.match(page, /<Suspense fallback=\{null\}>\s*<FullPreview \/>\s*<\/Suspense>/, "useParams needs Suspense, or next build stops");
+}
+
 console.log("project-panel: all ok");
