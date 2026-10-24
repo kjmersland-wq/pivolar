@@ -139,7 +139,7 @@ function Cost({ metadata }: { metadata: unknown }) {
       <span>≈ {money(m.costUsd)}</span>
       <span>· {tokens.toLocaleString("nb-NO")} tokens</span>
       {m.cachedTokens ? <span>· {Math.round((m.cachedTokens / Math.max(m.inputTokens ?? 1, 1)) * 100)} % fra mellomlager</span> : null}
-      {m.stopped ? <span className="text-amber-400">· stoppet av løkkevakten</span> : null}
+      {m.stopped ? <span className="text-amber-400">{m.stopped === "cost-cap" ? "· stoppet ved kostnadsgrensen" : "· stoppet av løkkevakten"}</span> : null}
     </p>
   );
 }

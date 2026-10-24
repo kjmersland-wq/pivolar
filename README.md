@@ -95,3 +95,27 @@ Gmail-kontaktskjema og Google Sheets bruker din egen Google-konto. Du lager en �
 Viktig om tokenene: står appen din i *Testing*-modus hos Google, slutter tilgangen å virke etter 7 dager. Trykk *Publish app* på consent screen for å unngå det. Appen vises da som «ikke verifisert» for andre, men det er bare deg som bruker den, og du kan fortsette.
 
 Pivolar ber bare om det den trenger: `gmail.send` (sende, ikke lese e-posten din) og `spreadsheets`. Tokenet lagres kryptert, vises aldri i nettleseren, og sendes bare til Vercel ved publisering av et prosjekt som bruker det.
+
+## Kvoter og hard stopp
+
+Alt som koster penger kontrolleres på serveren før arbeidet starter. Sjekkene i nettleseren er bare en bekvemmelighet.
+
+**Rekkefølge for hver AI-forespørsel** (`src/lib/quota/gate.ts`): innlogget, ikke slått av, ikke for mange forespørsler, tjenestens dagsgrense, og så brukerens eget budsjett. Før modellen kjører settes et beløp av mot budsjettet (`reserve_usage`, atomisk), og beløpet gis tilbake når forespørselen er ferdig. Mange forespørsler samtidig kan derfor ikke til sammen bruke mer enn det som er igjen. En reservasjon som aldri frigis, teller ikke etter 15 minutter.
+
+**Grenser per forespørsel:** `maxOutputTokens` per steg, tidsavbrudd (under plattformens 300 s), en kostnadsgrense som stopper forespørselen med en forklaring, 25 steg, løkkevakten og høyst tre bilder. Forespørselen avvises over 12 MB.
+
+**Rate limit per bruker** (`rate_limit`): chat 20 per minutt, analyse 10 per 10 min, kjøring av prosjekt 10 per time, import 20 per time, publisering 20 per time, eksport 30 per 10 min, pull request 30 per time. Tallene står i `src/lib/quota/config.ts`.
+
+**Miljøvariabler (alle valgfrie):**
+
+| Variabel | Standard | Hva |
+|---|---|---|
+| `AI_DISABLED` | av | `1` stanser all AI umiddelbart (nødbrems) |
+| `IMPORT_DISABLED` | av | `1` stanser import fra GitHub og ZIP |
+| `REQUEST_CAP_USD` | 1.5 | mest én forespørsel kan koste (maks 50) |
+| `MAX_OUTPUT_TOKENS` | 16000 | mest modellen skriver per steg (maks 64000) |
+| `REQUEST_TIMEOUT_MS` | 240000 | avbryter en forespørsel etter så lang tid (maks 280000) |
+| `GLOBAL_DAILY_USD` | ingen | mest hele tjenesten bruker på AI per døgn |
+| `QUOTA_ALLOW_UNSET` | av | `1` slipper forespørsler gjennom mens databasefunksjonene mangler. Bare mellom en deploy og dens migrasjon. |
+
+**Oppsett:** kjør `supabase/migrations/20261024160000_pivolar_quota.sql` i Supabase **før** du deployer. Migrasjonen bare legger til, og gamle versjoner av appen virker som før. Mangler funksjonene, avviser serveren AI-forespørsler med beskjed om å kjøre den (det er med vilje: «usikker» skal aldri bety «gratis»).

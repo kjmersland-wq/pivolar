@@ -1,4 +1,5 @@
 import { Sandbox } from "@vercel/sandbox";
+import { limit } from "@/lib/quota/server";
 import { z } from "zod";
 import { diffImport } from "@/lib/github/changes";
 import { downloadBranch, GitHubImportError } from "@/lib/github/repo";
@@ -56,6 +57,10 @@ export async function POST(request: Request) {
       await sandbox.extendTimeout(10 * 60_000).catch(() => {});
       return Response.json({ running: true, written: Object.keys(write).length, removed: remove.length });
     }
+
+    // Starting a run is what costs money (a throwaway VM). Stopping and syncing are not counted.
+    const stopped = await limit("runner");
+    if (stopped) return stopped;
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

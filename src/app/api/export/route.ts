@@ -1,3 +1,4 @@
+import { limit } from "@/lib/quota/server";
 import { PROTECTED_PATHS, type FileMap } from "@/lib/files";
 import { buildDeployableProject } from "@/lib/publish/project";
 import { buildExport, slug } from "@/lib/zip/export";
@@ -15,6 +16,8 @@ type Body = {
 };
 
 export async function POST(request: Request) {
+  const stopped = await limit("export");
+  if (stopped) return stopped;
   const body = (await request.json().catch(() => ({}))) as Body;
   const name = (body.name ?? "").trim().slice(0, 80) || "pivolar-prosjekt";
   const mode = body.mode === "vite" ? "vite" : "source";

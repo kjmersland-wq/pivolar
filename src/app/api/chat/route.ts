@@ -6,6 +6,9 @@ import { buildIndex, readFile, recentPaths, searchFiles, shouldIndex } from "@/l
 import { detectLoop, withNoteBeforeFinish, type LoopFinding, type StepLike } from "@/lib/guard/loop";
 import { createImageTool } from "@/lib/image-gen";
 import { searchImages } from "@/lib/images";
+import { quotaConfig } from "@/lib/quota/config";
+import { CAP_NOTE, overCap, type StepUsage } from "@/lib/quota/decide";
+import { openAiGate } from "@/lib/quota/gate";
 import { createClient } from "@/lib/supabase/server";
 import { logChatUsage, logImageUsage } from "@/lib/usage/log";
 import { chatCostDetailed, pricesFor } from "@/lib/usage/pricing";
@@ -157,7 +160,23 @@ function withoutEmptyImages(messages: UIMessage[]): UIMessage[] {
   })) as UIMessage[];
 }
 
+/** The largest request body accepted. The whole project travels with every message, so this is generous, but not unlimited. */
+const MAX_BODY_BYTES = 12_000_000;
+
+const stopText = (status: number, message: string) => new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+
 export async function POST(request: Request) {
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return stopText(413, "Forespørselen er for stor.");
+
+  // Every limit that costs money is checked here, on the server, before any work starts. The checks
+  // in the browser are a convenience; this is the stop that cannot be skipped.
+  const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const quota = quotaConfig();
+  const gate = await openAiGate(supabase, auth.user, quota);
+  if (!gate.ok) return stopText(gate.status, gate.message);
+  let capped = false;
+
   const { messages, mode = "build", edits = [] } = (await request.json()) as {
     messages: UIMessage[];
     mode?: "build" | "chat";
@@ -168,8 +187,6 @@ export async function POST(request: Request) {
   const working: FileMap = deriveFiles(messages, edits);
 
   // One request may make a few pictures; they are stored under the signed-in user's own folder.
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
   const imageModel = process.env.IMAGE_MODEL ?? "google/imagen-4.0-generate-001";
   const generateImageTool = auth.user
     ? createImageTool({
@@ -230,16 +247,29 @@ export async function POST(request: Request) {
     instructions: [{ role: "system", content: systemPrompt(working, mode, recent), providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }],
     // The analysis tool shapes its own result for the model (trimmed numbers plus pictures), so it is passed here too.
     messages: await convertToModelMessages(trimOldAnalyses(withoutEmptyImages(messages)), analyzeTool ? { tools: { analyzeSite: analyzeTool } } : {}),
+    // Hard stops for one request: no more than this many tokens per step, no longer than this in total
+    // (below the platform's own limit, so it ends cleanly), and no more than the request was allowed to cost.
+    maxOutputTokens: quota.maxOutputTokens,
+    abortSignal: AbortSignal.timeout(quota.timeoutMs),
     stopWhen: [
       isStepCount(25),
       ({ steps }) => {
         loop = detectLoop(steps as unknown as StepLike[]);
         return loop !== null;
       },
+      ({ steps }) => {
+        capped = overCap(steps as unknown as StepUsage[], gate.capUsd, pricesFor());
+        return capped;
+      },
     ],
     // Every finished request is added to the usage meter. The server keeps running when the browser stops waiting, so it is still counted.
+    // The amount set aside for the request is given back when the real cost is in.
     onEnd: async ({ usage }) => {
-      if (auth.user) await logChatUsage(supabase, auth.user.id, usage);
+      try {
+        if (auth.user) await logChatUsage(supabase, auth.user.id, usage);
+      } finally {
+        await gate.release();
+      }
     },
     tools: mode === "build"
       ? {
@@ -304,8 +334,8 @@ export async function POST(request: Request) {
     messageMetadata: ({ part }) => {
       if (part.type !== "finish") return undefined;
       const cost = chatCostDetailed(part.totalUsage, pricesFor());
-      return { costUsd: cost.total, inputTokens: cost.inputTokens, outputTokens: cost.outputTokens, cachedTokens: cost.cachedTokens, ...(loop ? { stopped: (loop as LoopFinding).kind } : {}) };
+      return { costUsd: cost.total, inputTokens: cost.inputTokens, outputTokens: cost.outputTokens, cachedTokens: cost.cachedTokens, ...(loop ? { stopped: (loop as LoopFinding).kind } : capped ? { stopped: "cost-cap" } : {}) };
     },
   });
-  return createUIMessageStreamResponse({ stream: withNoteBeforeFinish(uiStream as unknown as ReadableStream<{ type: string }>, () => (loop ? (loop as LoopFinding).message : null)) as never });
+  return createUIMessageStreamResponse({ stream: withNoteBeforeFinish(uiStream as unknown as ReadableStream<{ type: string }>, () => (loop ? (loop as LoopFinding).message : capped ? CAP_NOTE : null)) as never });
 }

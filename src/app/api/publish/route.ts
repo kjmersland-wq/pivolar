@@ -1,3 +1,4 @@
+import { limit } from "@/lib/quota/server";
 import { pickEnv } from "@/lib/connectors";
 import { isHostId, type HostId } from "@/lib/hosting/catalog";
 import { isUuid } from "@/lib/oauth/core";
@@ -50,6 +51,8 @@ type Event =
  * one commit and deployed to Vercel. Progress is streamed as one JSON object per line.
  */
 export async function POST(request: Request) {
+  const stopped = await limit("publish");
+  if (stopped) return stopped;
   const body = (await request.json().catch(() => ({}))) as Body;
   const files = Object.fromEntries(Object.entries(body.files ?? {}).filter(([path]) => !PROTECTED_PATHS.has(path)));
   const title = (body.name ?? "").trim() || "Pivolar-app";

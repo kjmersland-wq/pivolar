@@ -1,3 +1,4 @@
+import { limit } from "@/lib/quota/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { PROTECTED_PATHS } from "@/lib/files";
@@ -31,6 +32,8 @@ export async function GET() {
  * difference. The imported branch itself is never changed.
  */
 export async function POST(request: Request) {
+  const stopped = await limit("pr");
+  if (stopped) return stopped;
   const token = process.env.GITHUB_TOKEN;
   if (!token) return NextResponse.json({ error: "GITHUB_TOKEN mangler i miljøvariablene, så Pivolar kan ikke skrive til GitHub." }, { status: 400 });
   const parsed = Body.safeParse(await request.json().catch(() => null));

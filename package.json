@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node tests/direct-edit.test.mts && node tests/compose.test.mts && node tests/zip.test.mts && node tests/images.test.mts && node tests/publish.test.mts && node tests/image-gen.test.mts && node tests/usage.test.mts && node tests/analyze.test.mts && node tests/compare.test.mts && node tests/context.test.mts && node tests/guard.test.mts && node tests/explain.test.mts && node tests/checks.test.mts && node tests/github.test.mts && node tests/github-pr.test.mts && node tests/sandbox-map.test.mts && node tests/runner.test.mts && node tests/seo.test.mts && node tests/connectors.test.mts && node tests/security-pack.test.mts && node tests/analytics.test.mts && node tests/oauth.test.mts && node tests/hosting.test.mts"
+    "test": "node tests/direct-edit.test.mts && node tests/compose.test.mts && node tests/zip.test.mts && node tests/images.test.mts && node tests/publish.test.mts && node tests/image-gen.test.mts && node tests/usage.test.mts && node tests/analyze.test.mts && node tests/compare.test.mts && node tests/context.test.mts && node tests/guard.test.mts && node tests/explain.test.mts && node tests/checks.test.mts && node tests/github.test.mts && node tests/github-pr.test.mts && node tests/sandbox-map.test.mts && node tests/runner.test.mts && node tests/seo.test.mts && node tests/connectors.test.mts && node tests/security-pack.test.mts && node tests/analytics.test.mts && node tests/oauth.test.mts && node tests/hosting.test.mts && node tests/quota.test.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.86",

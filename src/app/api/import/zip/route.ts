@@ -1,3 +1,4 @@
+import { limit } from "@/lib/quota/server";
 import { analyze } from "@/lib/zip/analyze";
 import { ImportError, LIMITS, readZip } from "@/lib/zip/read";
 
@@ -6,6 +7,8 @@ import { ImportError, LIMITS, readZip } from "@/lib/zip/read";
  * The archive stays in memory: it is never written to disk, extracted to a folder or executed.
  */
 export async function POST(request: Request) {
+  const stopped = await limit("import");
+  if (stopped) return stopped;
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (declared > LIMITS.archiveBytes) {
     return Response.json({ error: `Arkivet er for stort (maks ${LIMITS.archiveBytes / 1_000_000} MB).` }, { status: 413 });

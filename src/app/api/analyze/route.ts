@@ -1,3 +1,4 @@
+import { limit } from "@/lib/quota/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { analyzeSite } from "@/lib/analyze/analyze";
@@ -13,6 +14,8 @@ const Body = z.object({ url: z.string().min(4).max(500) });
  * Behind the login gate like every other route.
  */
 export async function POST(request: Request) {
+  const stopped = await limit("analyze");
+  if (stopped) return stopped;
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Skriv inn en adresse." }, { status: 400 });
   const started = Date.now();

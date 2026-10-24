@@ -1,3 +1,4 @@
+import { limit } from "@/lib/quota/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { downloadBranch, GITHUB_READ_OPTIONS, GitHubImportError, listBranches, parseRepoInput } from "@/lib/github/repo";
@@ -24,6 +25,8 @@ export async function GET() {
  * checks as an uploaded ZIP: paths, sizes, binaries and files that may hold secrets.
  */
 export async function POST(request: Request) {
+  const stopped = await limit("import");
+  if (stopped) return stopped;
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Skriv inn en GitHub-adresse, for eksempel github.com/navn/repo." }, { status: 400 });
   const target = parseRepoInput(parsed.data.repo);
