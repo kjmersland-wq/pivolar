@@ -46,8 +46,8 @@ export type ReadResult = {
   stats: { entries: number; kept: number; bytes: number };
 };
 
-const IGNORED_DIRS = new Set(["node_modules", ".git", ".next", ".nuxt", ".svelte-kit", ".turbo", ".vercel", ".cache", "dist", "build", "out", "coverage", "__pycache__", ".venv", "venv", ".idea", ".vscode"]);
-const BINARY = /\.(png|jpe?g|gif|webp|avif|ico|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|mov|avi|webm|wav|ogg|pdf|zip|gz|tgz|bz2|7z|rar|jar|exe|dll|so|dylib|class|wasm|sqlite3?|db|psd|ai)$/i;
+export const IGNORED_DIRS = new Set(["node_modules", ".git", ".next", ".nuxt", ".svelte-kit", ".turbo", ".vercel", ".cache", "dist", "build", "out", "coverage", "__pycache__", ".venv", "venv", ".idea", ".vscode"]);
+export const BINARY = /\.(png|jpe?g|gif|webp|avif|ico|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|mov|avi|webm|wav|ogg|pdf|zip|gz|tgz|bz2|7z|rar|jar|exe|dll|so|dylib|class|wasm|sqlite3?|db|psd|ai)$/i;
 const LOCKFILES = /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|composer\.lock)$/;
 
 /** Returns the safe form of an entry path, or the reason it is unsafe. */

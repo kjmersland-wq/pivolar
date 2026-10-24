@@ -4,6 +4,8 @@
  * applies here. A token is optional for public repositories and needed for private ones.
  */
 
+import { THIN_LIMITS, thinArchive, type Thin } from "./thin.ts";
+
 export type RepoRef = { owner: string; repo: string };
 export type RepoSource = { owner: string; repo: string; branch: string; sha: string; private: boolean; url: string };
 
@@ -116,6 +118,53 @@ export async function downloadBranch(
   if (zip.length > MAX_ARCHIVE_BYTES) throw new GitHubImportError(`Arkivet er for stort (maks ${MAX_ARCHIVE_BYTES / 1_000_000} MB).`, 413);
 
   return { source: { owner, repo, branch, sha: commit.sha, private: meta.private, url: meta.html_url }, zip };
+}
+
+/**
+ * The same as `downloadBranch`, for importing: the archive is read as it arrives and only what could be kept
+ * is held (see thin.ts), so a repository full of pictures, sound and dependencies is no longer refused for its size.
+ */
+export async function downloadBranchThin(
+  input: RepoRef & { branch?: string | undefined },
+  token: string | undefined,
+  fileBytes: number,
+  fetcher: Fetcher = fetch,
+): Promise<{ source: RepoSource; thin: Thin }> {
+  const { owner, repo } = input;
+  const meta = await getJson<{ default_branch: string; private: boolean; size: number; html_url: string }>(fetcher, `${API}/repos/${owner}/${repo}`, token, "repoet");
+  if (meta.size > THIN_LIMITS.repoKb) {
+    throw new GitHubImportError(`Repoet er for stort (${Math.round(meta.size / 1000)} MB, maks ${THIN_LIMITS.repoKb / 1000} MB).`, 413);
+  }
+  const branch = input.branch || meta.default_branch;
+  const commit = await getJson<{ sha: string }>(fetcher, `${API}/repos/${owner}/${repo}/commits/${encodeURIComponent(branch)}`, token, `grenen «${branch}»`);
+  let response: Response;
+  try {
+    response = await fetcher(`${API}/repos/${owner}/${repo}/zipball/${commit.sha}`, { headers: headers(token), redirect: "follow", signal: AbortSignal.timeout(THIN_LIMITS.ms) });
+  } catch {
+    throw new GitHubImportError("Fikk ikke lastet ned repoet fra GitHub.", 502);
+  }
+  if (!response.ok) throw explain(response.status, Boolean(token), "arkivet");
+  if (!response.body) throw new GitHubImportError("GitHub sendte ikke noe innhold.", 502);
+  const declared = Number(response.headers.get("content-length") ?? "0");
+  if (declared > THIN_LIMITS.downloadBytes) throw new GitHubImportError(`Arkivet er for stort (maks ${THIN_LIMITS.downloadBytes / 1_000_000} MB).`, 413);
+  const thin = await thinArchive(response.body, { fileBytes });
+  return { source: { owner, repo, branch, sha: commit.sha, private: meta.private, url: meta.html_url }, thin };
+}
+
+/**
+ * Whether anyone can read the repository without a key. Asked without the token, so the answer is what the
+ * outside world sees. A public repository can be cloned inside the isolated machine without any credential
+ * there, whatever its size.
+ */
+export async function isPublicRepo(ref: RepoRef, fetcher: Fetcher = fetch): Promise<boolean> {
+  try {
+    const response = await fetcher(`${API}/repos/${ref.owner}/${ref.repo}`, { headers: headers(undefined), signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) return false;
+    const meta = (await response.json()) as { private?: boolean };
+    return meta.private === false;
+  } catch {
+    return false;
+  }
 }
 
 /** What a GitHub import keeps: code and small text, with bulk data left in the repository. */

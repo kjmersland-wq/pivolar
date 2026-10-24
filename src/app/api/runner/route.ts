@@ -5,7 +5,7 @@ import { limit, signedInUserId } from "@/lib/quota/server";
 import { atConcurrentLimit, extensionFor, isPastLimit, ownerPrefix, sandboxName } from "@/lib/runner/limits";
 import { z } from "zod";
 import { diffImport } from "@/lib/github/changes";
-import { downloadBranch, GitHubImportError } from "@/lib/github/repo";
+import { downloadBranch, GitHubImportError, isPublicRepo } from "@/lib/github/repo";
 import { archiveFiles } from "@/lib/runner/archive";
 import { parseEnv, PORT, projectFiles, startProject, syncProject, type RunEvent } from "@/lib/runner/run";
 
@@ -97,16 +97,19 @@ export async function POST(request: Request) {
         const send = (event: RunEvent) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         try {
           // A named sandbox that is still running is reused, so reopening the preview does not start over.
+          // A public repository is cloned inside the machine, so its size does not matter here and no credential is needed.
+          // A private one is fetched here and copied in, so no GitHub credential ever enters the sandbox.
+          const publicRepo = body.github ? await isPublicRepo({ owner: body.github.owner, repo: body.github.repo }) : false;
           const sandbox = await Sandbox.getOrCreate({
             name: nameFor(body.id),
             ports: [PORT],
             timeout: TIMEOUT,
             persistent: false,
             resources: { vcpus: 2 },
+            ...(publicRepo && body.github ? { source: { type: "git" as const, url: `https://github.com/${body.github.owner}/${body.github.repo}.git`, revision: body.github.sha } } : {}),
           });
-          // The repository itself is fetched here and copied in, so no GitHub credential ever enters the sandbox.
           let base: Record<string, Buffer> = {};
-          if (body.github) {
+          if (body.github && !publicRepo) {
             const { zip } = await downloadBranch({ owner: body.github.owner, repo: body.github.repo, branch: body.github.sha }, process.env.GITHUB_TOKEN || undefined);
             base = archiveFiles(zip);
           }

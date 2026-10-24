@@ -1,7 +1,7 @@
 import { limit } from "@/lib/quota/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { downloadBranch, GITHUB_READ_OPTIONS, GitHubImportError, listBranches, parseRepoInput } from "@/lib/github/repo";
+import { downloadBranchThin, GITHUB_READ_OPTIONS, GitHubImportError, listBranches, parseRepoInput } from "@/lib/github/repo";
 import { analyze } from "@/lib/zip/analyze";
 import { ImportError, readZip } from "@/lib/zip/read";
 
@@ -35,9 +35,12 @@ export async function POST(request: Request) {
 
   try {
     if (parsed.data.branchesOnly) return NextResponse.json({ ...(await listBranches(target, token)), repo: `${target.owner}/${target.repo}` });
-    const { source, zip } = await downloadBranch({ ...target, branch: parsed.data.branch || target.branch }, token);
-    const result = readZip(zip, GITHUB_READ_OPTIONS);
-    return NextResponse.json({ ...result, report: analyze(result.files), source });
+    const { source, thin } = await downloadBranchThin({ ...target, branch: parsed.data.branch || target.branch }, token, GITHUB_READ_OPTIONS.fileBytes);
+    const result = readZip(thin.zip, GITHUB_READ_OPTIONS);
+    // What was left out while the archive was read comes first in the list, then what the checks left out.
+    const more = thin.droppedCount - thin.dropped.length;
+    const skipped = [...thin.dropped, ...(more > 0 ? [{ path: "…", reason: `${more} filer til er utelatt av samme grunner (bilder, lyd, avhengigheter, store datafiler)` }] : []), ...result.skipped];
+    return NextResponse.json({ ...result, skipped, report: analyze(result.files), source });
   } catch (error) {
     if (error instanceof GitHubImportError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ImportError) return NextResponse.json({ error: error.message }, { status: 400 });
