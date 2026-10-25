@@ -12,6 +12,8 @@ import type { FileMap, UserEdit } from "@/lib/files";
 import { deleteProject, duplicateProject, getProject, loadImportInfo, loadPublish } from "@/lib/projects";
 import { addFiles, removeFile } from "@/lib/uploads/client";
 import { UPLOAD_LIMITS, TYPES, type Upload } from "@/lib/uploads/rules";
+import { MoveCheck } from "@/components/MoveCheck";
+import { projectFiles } from "@/lib/runner/run";
 import { KNOWLEDGE_MAX, KNOWLEDGE_TEMPLATES, knowledgeOf } from "@/lib/knowledge";
 import { originLabel, projectStats } from "@/lib/project-stats";
 import { fetchUsage, NOK_PER_USD } from "@/lib/usage/client";
@@ -38,6 +40,7 @@ const SECTIONS = [
   { id: "filer", label: "Filer" },
   { id: "publisering", label: "Publisering" },
   { id: "hemmeligheter", label: "Hemmeligheter" },
+  { id: "flytting", label: "Flytting" },
   { id: "git", label: "Git" },
   { id: "handlinger", label: "Handlinger" },
 ] as const;
@@ -148,6 +151,12 @@ export function ProjectPanel({
   const project = open ? getProject(projectId) : undefined;
   const info = open ? loadImportInfo(projectId) : null;
   const published = open ? loadPublish(projectId) : null;
+  // The move checklist is for imported projects that bring their own package.json
+  const moving = useMemo(() => {
+    if (!open) return null;
+    const own = projectFiles(files);
+    return "/package.json" in own ? own : null;
+  }, [open, files]);
   const stats = useMemo(() => projectStats(messages, edits, files), [messages, edits, files]);
   const connected = Object.entries(saved)
     .map(([id, values]) => ({ id, connector: connectorById(id), filled: Object.values(values).filter(Boolean).length }))
@@ -190,7 +199,7 @@ export function ProjectPanel({
                 <Settings className="size-4 shrink-0" />
                 Innstillinger
               </p>
-              {SECTIONS.map((section) => (
+              {SECTIONS.filter((section) => section.id !== "flytting" || moving).map((section) => (
                 <button key={section.id} type="button" onClick={() => jump(section.id)} className="rounded-xl py-1.5 pl-9 pr-3 text-left text-[13px] text-muted transition hover:text-fg">
                   {section.label}
                 </button>
@@ -392,6 +401,12 @@ export function ProjectPanel({
                     </button>
                   </Row>
                 </Card>
+
+                {moving && (
+                  <Card id="flytting" title="Flytting" text="Sjekkliste for å flytte et importert prosjekt (for eksempel fra Lovable) til din egen Supabase, egne betalingsnøkler og Cloudflare Pages. Leses fra filene; ingen hemmeligheter vises.">
+                    <MoveCheck projectId={projectId} files={moving} omitted={info?.omittedSecrets ?? []} />
+                  </Card>
+                )}
 
                 <Card id="git" title="Git" text="Hvor koden kommer fra og hvor den kan sendes.">
                   {info?.github ? (

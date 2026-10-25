@@ -328,3 +328,7 @@ Et nettsted med mye video og lyd (for eksempel slow-blues.com) fyller ikke lagri
 - **Mediebiblioteket** i WordPress: video- og lydfiler regnes ikke som bilder og kopieres aldri. Bilder som ingen side viser, hentes heller ikke, så lagringen går bare til bilder du faktisk ser.
 - **SoundCloud, Spotify, kart og andre rammer** forblir lenker eller kart som før.
 - Rapporten (og `IMPORT.md`) sier hvor mange videoer og lydfiler som bare er lenket, og at de spilles fra det gamle nettstedet så lenge det er på nett. Skal filene bli i prosjektet, legger du dem til under Filer i Mer-panelet.
+
+## Flyttesjekk (Lovable og andre Vite + Supabase-prosjekter)
+
+Importerte prosjekter med egen `package.json` får en «Flytting»-seksjon i Mer-panelet. Den leser filene (ingen kjøring, ingen nettverk) og lager en avkrysningsliste: migrasjoner i rekkefølge, tabeller uten radnivå-sikkerhet eller regler, filbøtter, edge-funksjoner, navnene på hemmelighetene de leser (med hvor man får dem), webhook-adresser, Paddle/Stripe-ider, `VITE_`-variabler, gammel Supabase-adresse i koden, Lovable-rester og Cloudflare Pages-innstillinger. Verdier av hemmeligheter vises aldri. Avkrysning lagres i nettleseren per prosjekt. Koden ligger i `src/lib/move/check.ts`, testen i `tests/move.test.mts`.
