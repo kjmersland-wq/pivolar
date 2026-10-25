@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { autoHosts, deployAuto, isAutoHost, type Opened } from "../src/lib/deploy/auto.ts";
 import { buildDist, type BuildSandbox } from "../src/lib/deploy/build.ts";
+import { buildEnvFrom, isImportedProject, parseEnvText, planImported } from "../src/lib/deploy/imported.ts";
 import { cloudflareDeploy, cloudflareEnsureProject, deployToCloudflare, pagesHash } from "../src/lib/deploy/cloudflare.ts";
 import { checkDist, contentTypeOf, DIST_LIMITS, distPath, withHostRules, type DistFiles } from "../src/lib/deploy/files.ts";
 import { deployToNetlify, netlifyEnsureSite } from "../src/lib/deploy/netlify.ts";
@@ -244,7 +245,7 @@ function cloudflareApi(options: { projectExists?: boolean; have?: Set<string>; u
 {
   const route = read("src/app/api/publish/route.ts");
   assert.match(route, /\.\.\.autoHosts\(\)/, "the status answer carries only yes or no");
-  assert.ok(route.indexOf("deployToVercel(") < route.indexOf("deployAuto("), "after the code is on GitHub");
+  assert.ok(route.indexOf("deployToVercel(") < route.lastIndexOf("deployAuto("), "after the code is on GitHub");
   assert.match(route, /if \(!wantGitHub \|\| !ok\)[\s\S]*Hoppet over fordi GitHub feilet/, "nothing is rolled out when the code did not get to GitHub");
   assert.match(route, /body\.autoDeploy !== false && autoHosts\(\)\[host\]/, "only when the keys are set, and it can be turned off");
   assert.match(route, /limit\("publish"\)/);
@@ -252,6 +253,64 @@ function cloudflareApi(options: { projectExists?: boolean; have?: Set<string>; u
   assert.match(dialog, /NETLIFY_TOKEN/);
   assert.match(dialog, /CLOUDFLARE_API_TOKEN og CLOUDFLARE_ACCOUNT_ID/);
   assert.match(dialog, /steps\.host/);
+}
+
+// --- an imported project is built from its repository
+{
+  const vite = { "/package.json": JSON.stringify({ scripts: { build: "vite build" }, devDependencies: { vite: "5" }, dependencies: { react: "18" } }), "/src/App.tsx": "x", "/bun.lockb": "x", "/.env": "A=1", "/README.md": "hei" };
+  assert.equal(isImportedProject(vite), true);
+  assert.equal(isImportedProject({ "/App.tsx": "x" }), false, "a project made in Pivolar is not imported");
+  const plan = planImported(vite);
+  assert.ok(plan.ok);
+  if (plan.ok) {
+    assert.deepEqual(Object.keys(plan.project).sort(), ["README.md", "package.json", "src/App.tsx"], "no .env goes to the build machine");
+    assert.equal(plan.outDir, "dist");
+    assert.ok(plan.remove.includes("bun.lockb"));
+    assert.equal(plan.notes.length, 1);
+  }
+  const out = planImported({ ...vite, "/vite.config.ts": 'export default { build: { outDir: "build" } }' });
+  assert.ok(out.ok && out.outDir === "build");
+  const bad = planImported({ ...vite, "/vite.config.ts": 'export default { build: { outDir: "../x" } }' });
+  assert.ok(!bad.ok && /ikke en vanlig mappe/.test(bad.message));
+  for (const [dep, word] of [["@tanstack/react-start", "TanStack Start"], ["next", "Next.js"]] as const) {
+    const r = planImported({ "/package.json": JSON.stringify({ scripts: { build: "x" }, dependencies: { [dep]: "1" } }) });
+    assert.ok(!r.ok && r.message.includes(word), word);
+  }
+  const noBuild = planImported({ "/package.json": JSON.stringify({ devDependencies: { vite: "5" } }) });
+  assert.ok(!noBuild.ok && /build-skript/.test(noBuild.message));
+
+  // Variables for the build: only public VITE_ names, never a secret
+  assert.deepEqual(buildEnvFrom({ VITE_A: "1", VITE_SUPABASE_URL: "https://x.supabase.co" }), { env: { VITE_A: "1", VITE_SUPABASE_URL: "https://x.supabase.co" }, rejected: [] });
+  const refused = buildEnvFrom({ SECRET: "x", VITE_SECRET_KEY: "x", VITE_SERVICE_ROLE: "x", VITE_OK: "sk_live_abcdef", VITE_Z: "sb_secret_abc", lower: "x", VITE_EMPTY: "" });
+  assert.deepEqual(refused.env, {});
+  assert.deepEqual(refused.rejected.sort(), ["SECRET", "VITE_OK", "VITE_SECRET_KEY", "VITE_SERVICE_ROLE", "VITE_Z", "lower"]);
+  assert.deepEqual(buildEnvFrom("nope"), { env: {}, rejected: [] });
+  assert.deepEqual(parseEnvText(["# kommentar", "VITE_A=1", 'export VITE_B="to ord"', "", "VITE_C = tre "].join(String.fromCharCode(10))), { VITE_A: "1", VITE_B: "to ord", VITE_C: "tre" });
+
+  // The build: foreign lock files are removed, the public variables and output folder are used, and nothing else is passed
+  const m = machine();
+  m.sandbox.readFileToBuffer = async ({ path }) => (path.endsWith("/build/index.html") ? Buffer.from("<h1>x</h1>") : null);
+  const orig = m.sandbox.runCommand;
+  m.sandbox.runCommand = async (params) => {
+    const r = await orig(params);
+    return params.cmd === "find" ? { ...r, stdout: async () => "build/index.html" + String.fromCharCode(10) } : r;
+  };
+  const built = await buildDist(m.sandbox, { "package.json": "{}" }, { siteUrl: "https://x.pages.dev", env: { VITE_A: "1" }, outDir: "build", remove: ["bun.lockb", "../etc"], legacyPeerDeps: true });
+  assert.deepEqual([...built.keys()], ["/index.html"]);
+  assert.deepEqual(m.calls.map((c) => `${c.cmd} ${(c.args ?? []).join(" ")}`), ["rm -f bun.lockb", "npm install --no-audit --no-fund --loglevel=error --legacy-peer-deps", "npm run build", "find build -type f"], "a name with a path in it is never passed to rm");
+  assert.deepEqual(m.calls[2]!.env, { VITE_A: "1", SITE_URL: "https://x.pages.dev", CI: "1" });
+  await assert.rejects(buildDist(machine().sandbox, {}, { outDir: "../x" }), /ugyldig navn/);
+
+  // The route: only imported projects from a public repository, host keys needed, one repository address
+  const route = readFileSync(new URL("../src/app/api/publish/route.ts", import.meta.url), "utf8");
+  assert.match(route, /isImportedProject\(files\)/);
+  assert.match(route, /isPublicRepo\(/);
+  assert.match(route, /source: \{ type: "git"/);
+  assert.match(route, /buildEnvFrom\(body\.buildEnv\)/);
+  assert.ok(route.indexOf("planImported(files)") < route.indexOf("Sandbox.create", route.indexOf("publishImported")), "the plan is checked before a machine is started");
+  const dialog = readFileSync(new URL("../src/components/PublishDialog.tsx", import.meta.url), "utf8");
+  assert.match(dialog, /isImportedProject\(files\)/);
+  assert.match(dialog, /buildEnv: parseEnvText\(envText\)/);
 }
 
 console.log("deploy: all ok");

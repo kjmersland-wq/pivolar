@@ -1,4 +1,4 @@
-import { buildDist, type BuildSandbox, type ProjectFile } from "./build.ts";
+import { buildDist, type BuildOptions, type BuildSandbox, type ProjectFile } from "./build.ts";
 import { checkDist, type DistFiles } from "./files.ts";
 import { cloudflareDeploy, cloudflareEnsureProject } from "./cloudflare.ts";
 import { netlifyDeploy, netlifyEnsureSite } from "./netlify.ts";
@@ -27,6 +27,8 @@ export type AutoOptions = {
   fetcher?: typeof fetch;
   open: () => Promise<Opened>;
   onStatus?: (text: string) => void;
+  /** Extra build settings, for imported projects. */
+  build?: Pick<BuildOptions, "env" | "outDir" | "remove" | "legacyPeerDeps">;
 };
 
 export async function deployAuto(options: AutoOptions): Promise<{ url: string; created: boolean }> {
@@ -65,7 +67,7 @@ export async function deployAuto(options: AutoOptions): Promise<{ url: string; c
   const machine = await options.open();
   let files: DistFiles;
   try {
-    files = await buildDist(machine.sandbox, options.project, { siteUrl, onStep: (step) => status(step === "install" ? "Installerer pakker …" : step === "build" ? "Bygger siden …" : step === "read" ? "Henter de ferdige filene …" : "Sender filene til byggemaskinen …") });
+    files = await buildDist(machine.sandbox, options.project, { ...options.build, siteUrl, onStep: (step) => status(step === "install" ? "Installerer pakker …" : step === "build" ? "Bygger siden …" : step === "read" ? "Henter de ferdige filene …" : "Sender filene til byggemaskinen …") });
   } finally {
     await machine.stop().catch(() => {});
   }

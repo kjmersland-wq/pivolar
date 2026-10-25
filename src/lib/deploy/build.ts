@@ -31,7 +31,20 @@ async function run(sandbox: BuildSandbox, cmd: string, args: string[], what: str
   return result;
 }
 
-export async function buildDist(sandbox: BuildSandbox, project: Record<string, ProjectFile>, options: { siteUrl?: string; onStep?: (step: "write" | "install" | "build" | "read") => void } = {}): Promise<DistFiles> {
+export type BuildOptions = {
+  siteUrl?: string;
+  onStep?: (step: "write" | "install" | "build" | "read") => void;
+  /** Public build variables (VITE_…) the owner gave. Never a token. */
+  env?: Record<string, string>;
+  /** The folder the build writes to. */
+  outDir?: string;
+  /** Files to delete after the project is written (foreign lock files in a cloned repository). */
+  remove?: string[];
+  /** Install with the old peer-dependency rules, which imported projects often need. */
+  legacyPeerDeps?: boolean;
+};
+
+export async function buildDist(sandbox: BuildSandbox, project: Record<string, ProjectFile>, options: BuildOptions = {}): Promise<DistFiles> {
   const onStep = options.onStep ?? (() => {});
   const writes = Object.entries(project).flatMap(([path, file]) => {
     const clean = distPath(path.replace(/^\/+/, ""));
@@ -39,17 +52,21 @@ export async function buildDist(sandbox: BuildSandbox, project: Record<string, P
   });
   onStep("write");
   for (let i = 0; i < writes.length; i += 200) await sandbox.writeFiles(writes.slice(i, i + 200));
+  const outDir = options.outDir ?? "dist";
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(outDir)) throw new Error("Utdatamappen har et ugyldig navn.");
+  const remove = (options.remove ?? []).filter((name) => /^[A-Za-z0-9._-]{1,60}$/.test(name));
+  if (remove.length > 0) await run(sandbox, "rm", ["-f", ...remove], "Opprydding av låsefiler");
   onStep("install");
-  await run(sandbox, "npm", ["install", "--no-audit", "--no-fund", "--loglevel=error"], "Installasjonen av pakker");
+  await run(sandbox, "npm", ["install", "--no-audit", "--no-fund", "--loglevel=error", ...(options.legacyPeerDeps ? ["--legacy-peer-deps"] : [])], "Installasjonen av pakker");
   onStep("build");
-  await run(sandbox, "npm", ["run", "build"], "Byggingen", options.siteUrl ? { SITE_URL: options.siteUrl, CI: "1" } : { CI: "1" });
+  await run(sandbox, "npm", ["run", "build"], "Byggingen", { ...(options.env ?? {}), ...(options.siteUrl ? { SITE_URL: options.siteUrl } : {}), CI: "1" });
   onStep("read");
-  const listing = await run(sandbox, "find", ["dist", "-type", "f"], "Oppslaget i dist");
+  const listing = await run(sandbox, "find", [outDir, "-type", "f"], `Oppslaget i ${outDir}`);
   const paths = (await listing.stdout())
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => ({ line, path: distPath(line) }));
+    .map((line) => ({ line, path: distPath(outDir === "dist" ? line : line.replace(new RegExp(`^${outDir}/`), "dist/")) }));
   if (paths.some((p) => !p.path)) throw new Error("Byggingen ga en fil med et ugyldig navn, så ingenting er lagt ut.");
   if (paths.length > DIST_LIMITS.files) throw new Error(`Siden har ${paths.length} filer, og grensen er ${DIST_LIMITS.files}.`);
 

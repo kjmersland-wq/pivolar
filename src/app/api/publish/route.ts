@@ -13,6 +13,8 @@ import { buildDeployableProject, slugify } from "@/lib/publish/project";
 import { deployToVercel } from "@/lib/publish/vercel";
 import { autoHosts, deployAuto, isAutoHost, type Opened } from "@/lib/deploy/auto";
 import type { BuildSandbox } from "@/lib/deploy/build";
+import { buildEnvFrom, isImportedProject, planImported } from "@/lib/deploy/imported";
+import { isPublicRepo } from "@/lib/github/repo";
 
 export const maxDuration = 300;
 
@@ -38,6 +40,10 @@ type Body = {
   host?: string;
   /** Netlify and Cloudflare are rolled out from here when their keys are set. False keeps only the code on GitHub. */
   autoDeploy?: boolean;
+  /** For an imported project: the repository it came from, which the build machine clones. */
+  github?: { owner?: string; repo?: string; sha?: string };
+  /** For an imported project: public build variables (VITE_…) given by the owner. */
+  buildEnv?: Record<string, string>;
   /** The Pivolar project id, used to look up the Google sign-ins of the project. */
   projectId?: string;
   /** The Pivolar project id. When set, the site counts page views (without cookies) and reports them to Pivolar. */
@@ -78,8 +84,58 @@ export async function POST(request: Request) {
       const send = (event: Event) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
       let ok = true;
 
+      /** An imported project: cloned from its public repository in the build machine, with Pivolar's text files written over it. */
+      async function publishImported() {
+        const fail = (message: string) => {
+          ok = false;
+          send({ step: "host", status: "error", message });
+        };
+        send({ step: "github", status: "skipped", message: "Koden ligger allerede på GitHub." });
+        send({ step: "vercel", status: "skipped" });
+        if (!isAutoHost(host)) return fail("Importerte prosjekter rulles ut til Cloudflare eller Netlify. Velg en av dem.");
+        if (!autoHosts()[host]) return fail(host === "cloudflare" ? "CLOUDFLARE_API_TOKEN og CLOUDFLARE_ACCOUNT_ID må være satt i miljøvariablene." : "NETLIFY_TOKEN mangler i miljøvariablene.");
+        const plan = planImported(files);
+        if (!plan.ok) return fail(plan.message);
+        const repo = body.github;
+        if (!repo?.owner || !repo.repo || !/^[A-Za-z0-9-]{1,39}$/.test(repo.owner) || !/^[A-Za-z0-9._-]{1,100}$/.test(repo.repo) || (repo.sha && !/^[0-9a-f]{7,40}$/.test(repo.sha))) {
+          return fail("Bare prosjekter importert fra GitHub kan rulles ut slik, for byggemaskinen henter repoet derfra.");
+        }
+        if (!(await isPublicRepo({ owner: repo.owner, repo: repo.repo }))) return fail("Repoet er privat. Byggemaskinen kan bare hente offentlige repoer. Gjør det offentlig mens du ruller ut, eller bruk Cloudflares egen kobling til GitHub.");
+        const { env, rejected } = buildEnvFrom(body.buildEnv);
+        if (rejected.length > 0) return fail(`Variablene ${rejected.join(", ")} ble ikke brukt. Bare VITE_-variabler uten hemmeligheter kan gis til byggingen, for de blir synlige for alle som besøker siden.`);
+        send({ step: "project", status: "done", files: Object.keys(plan.project).length });
+        if (body.dryRun) return send({ step: "host", status: "skipped", message: "Prøvekjøring" });
+        send({ step: "host", status: "running", detail: "Gjør klart …" });
+        try {
+          const opened = async (): Promise<Opened> => {
+            const { Sandbox } = await import("@vercel/sandbox");
+            const sandbox = await Sandbox.create({
+              timeout: 8 * 60_000,
+              resources: { vcpus: 4 },
+              source: { type: "git", url: `https://github.com/${repo.owner}/${repo.repo}.git`, ...(repo.sha ? { revision: repo.sha } : {}) },
+            });
+            return { sandbox: sandbox as unknown as BuildSandbox, stop: async () => void (await sandbox.stop()) };
+          };
+          const result = await deployAuto({
+            host,
+            name: slug,
+            project: plan.project,
+            open: opened,
+            build: { env, outDir: plan.outDir, remove: plan.remove, legacyPeerDeps: true },
+            onStatus: (detail) => send({ step: "host", status: "running", detail }),
+          });
+          send({ step: "host", status: "done", url: result.url, created: result.created });
+        } catch (error) {
+          fail(error instanceof Error ? error.message : "Utrullingen feilet.");
+        }
+      }
+
       try {
         if (Object.keys(files).length === 0) throw new Error("Prosjektet har ingen filer å publisere.");
+        if (isImportedProject(files)) {
+          await publishImported();
+          return;
+        }
         if (host !== "vercel" && Object.keys(files).some((path) => path.startsWith("/api/"))) {
           throw new Error("Serverfunksjonene under /api virker bare på Vercel. Velg Vercel, eller fjern koblingene som bruker dem.");
         }

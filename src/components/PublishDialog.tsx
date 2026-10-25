@@ -10,7 +10,8 @@ import { deployLink } from "@/lib/hosting/files";
 import { profileOf, recommended } from "@/lib/hosting/recommend";
 import { loadConnectors } from "@/lib/connectors/store";
 import type { FileMap } from "@/lib/files";
-import { loadPublish, savePublish, type PublishInfo } from "@/lib/projects";
+import { loadImportInfo, loadPublish, savePublish, type PublishInfo } from "@/lib/projects";
+import { isImportedProject, parseEnvText } from "@/lib/deploy/imported";
 import { slugify } from "@/lib/publish/project";
 import { cn } from "@/lib/utils";
 
@@ -131,6 +132,10 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
   const [steps, setSteps] = useState<Steps>(IDLE);
   const [running, setRunning] = useState(false);
   const [last, setLast] = useState<PublishInfo | null>(null);
+  const [envText, setEnvText] = useState("");
+  // An imported project (its own package.json) is built from its GitHub repository, not generated from the files
+  const imported = isImportedProject(files);
+  const importInfo = open && imported ? loadImportInfo(projectId) : null;
 
   useEffect(() => {
     if (!open) return;
@@ -138,7 +143,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
     setLast(info);
     setName(info?.name ?? slugify(projectName));
     setSteps(IDLE);
-    setHost(recommended(profileOf(files)));
+    setHost(isImportedProject(files) ? "cloudflare" : recommended(profileOf(files)));
     fetch("/api/publish")
       .then((response) => response.json() as Promise<Config>)
       .then(setConfig)
@@ -147,7 +152,8 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId, projectName]);
 
-  const ready = Boolean(config?.github && (host !== "vercel" || config?.vercel));
+  const importedOk = Boolean(importInfo?.github && (host === "cloudflare" ? config?.cloudflare : host === "netlify" ? config?.netlify : false));
+  const ready = imported ? importedOk : Boolean(config?.github && (host !== "vercel" || config?.vercel));
   const slug = slugify(name);
   const hostInfo = hostById(host);
   const link = host !== "vercel" && steps.github.status === "done" && steps.github.url ? deployLink(host, steps.github.url) : null;
@@ -165,7 +171,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
       const response = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: slug, files, isPrivate, host, env: envFor(loadConnectors(projectId)), projectId, ...(analytics ? { analyticsProject: projectId } : {}) }),
+        body: JSON.stringify({ name: slug, files, isPrivate, host, ...(imported && importInfo?.github ? { github: { owner: importInfo.github.owner, repo: importInfo.github.repo, sha: importInfo.github.sha }, buildEnv: parseEnvText(envText) } : {}), env: envFor(loadConnectors(projectId)), projectId, ...(analytics ? { analyticsProject: projectId } : {}) }),
       });
       if (!response.ok || !response.body) throw new Error("Publisering startet ikke.");
       const reader = response.body.getReader();
@@ -241,9 +247,43 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
             </div>
 
             <div className="mt-5 space-y-4">
-              {config && !ready && <Setup config={config} needsVercel={host === "vercel"} />}
+              {config && !ready && !imported && <Setup config={config} needsVercel={host === "vercel"} />}
 
-              <HostingPicker files={files} value={host} onChange={setHost} disabled={running} />
+              {imported ? (
+                <div className="space-y-3 rounded-xl border border-line bg-surface-2 p-3.5">
+                  <p className="text-[13.5px] font-medium">Importert prosjekt</p>
+                  <p className="text-[12.5px] leading-relaxed text-muted">
+                    Pivolar henter repoet {importInfo?.github ? <span className="font-mono text-fg">{importInfo.github.owner}/{importInfo.github.repo}</span> : "fra GitHub"} i en isolert maskin, legger endringene dine oppå, bygger og laster opp. Koden røres ikke på GitHub. Bare vanlige Vite-prosjekter i offentlige repoer støttes.
+                  </p>
+                  {!importInfo?.github && <p className="text-[12.5px] text-red-400">Dette prosjektet er ikke importert fra GitHub, så byggemaskinen har ikke noe repo å hente.</p>}
+                  {importInfo?.github?.private && <p className="text-[12.5px] text-amber-400">Repoet er privat. Gjør det offentlig mens du ruller ut, ellers stopper utrullingen.</p>}
+                  <div className="flex gap-2">
+                    {(["cloudflare", "netlify"] as const).map((id) => (
+                      <button key={id} type="button" disabled={running} onClick={() => setHost(id)} className={cn("flex-1 rounded-lg border px-3 py-2 text-[13px] transition", host === id ? "border-accent bg-accent/10 font-medium" : "border-line text-muted hover:border-line-strong")}>
+                        {hostById(id).name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="build-env" className="text-[12.5px] font-medium text-muted">
+                      VITE_-variabler til byggingen (en per linje)
+                    </label>
+                    <textarea
+                      id="build-env"
+                      value={envText}
+                      onChange={(e) => setEnvText(e.target.value)}
+                      disabled={running}
+                      rows={4}
+                      spellCheck={false}
+                      placeholder="VITE_SUPABASE_URL=https://abc.supabase.co"
+                      className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-[12px] outline-none focus:border-line-strong disabled:opacity-60"
+                    />
+                    <p className="text-[12px] text-faint">Bare offentlige verdier (adresse og den offentlige nøkkelen). De blir synlige for alle som besøker siden. Hemmelige nøkler avvises.</p>
+                  </div>
+                </div>
+              ) : (
+                <HostingPicker files={files} value={host} onChange={setHost} disabled={running} />
+              )}
 
               <div className="space-y-1.5">
                 <label htmlFor="publish-name" className="text-[12.5px] font-medium text-muted">
@@ -270,25 +310,25 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                 </p>
               </div>
 
-              <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted">
+              {!imported && <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted">
                 <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} disabled={running || Boolean(last?.githubUrl)} className="size-4 accent-[var(--accent)]" />
                 <Lock className="size-3.5" />
                 Privat GitHub-repo{last?.githubUrl ? " (kan ikke endres etter første publisering)" : ""}
-              </label>
-              <label className="flex cursor-pointer items-start gap-2.5 text-[13px] text-muted">
+              </label>}
+              {!imported && <label className="flex cursor-pointer items-start gap-2.5 text-[13px] text-muted">
                 <input type="checkbox" checked={analytics} onChange={(e) => setAnalytics(e.target.checked)} disabled={running} className="mt-0.5 size-4 accent-[var(--accent)]" />
                 <span>
                   Tell besøk (uten cookies)
                   <span className="mt-0.5 block text-[12px] text-faint">Siden sender sti, kilde, land og enhet til Pivolar. Ingen IP-adresser lagres, og ingenting sendes hvis nettleseren ber om «Do Not Track». Se tallene under Analyse.</span>
                 </span>
-              </label>
+              </label>}
 
               {(running || finished) && (
                 <div className="space-y-2">
                   <StepRow icon={Rocket} title="Gjør prosjektet klart" state={steps.project} />
-                  <StepRow icon={GitBranch} title="GitHub" state={steps.github} />
+                  {!imported && <StepRow icon={GitBranch} title="GitHub" state={steps.github} />}
                   {host === "vercel" && <StepRow icon={Globe} title="Vercel" state={steps.vercel} />}
-                  {auto && <StepRow icon={Globe} title={hostInfo.name} state={steps.host} />}
+                  {(auto || imported) && <StepRow icon={Globe} title={hostInfo.name} state={steps.host} />}
                 </div>
               )}
 
@@ -333,7 +373,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                 {running ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
                 {running ? "Publiserer …" : last ? "Publiser på nytt" : "Publiser"}
               </button>
-              <p className={cn("text-center text-[11.5px] text-faint", ready && "hidden")}>Knappen låses opp når begge nøklene er lagt inn.</p>
+              <p className={cn("text-center text-[11.5px] text-faint", ready && "hidden")}>{imported ? `Knappen låses opp når repoet er importert fra GitHub og ${hostById(host).name} er satt opp på serveren (${autoKeys}).` : "Knappen låses opp når begge nøklene er lagt inn."}</p>
             </div>
           </motion.div>
         </motion.div>
