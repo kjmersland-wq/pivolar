@@ -17,7 +17,12 @@ export type Block =
   | { type: "button"; label: string; href: string }
   | { type: "columns"; columns: Block[][] }
   | { type: "table"; header: boolean; rows: string[][] }
-  | { type: "embed"; provider: "youtube" | "vimeo" | "map" | "other"; src: string }
+  /** A video from YouTube or Vimeo is kept as a link with the video's own picture, and a map or another frame as a link. `thumb` is the picture, read from the video's own address and not copied. */
+  | { type: "embed"; provider: "youtube" | "vimeo" | "map" | "other"; src: string; thumb?: string; title?: string }
+  /** A video file on the old site. Only the address is kept: the file stays where it is and is played from there. */
+  | { type: "video"; src: string; poster?: string; title?: string }
+  /** A sound file on the old site, kept the same way. */
+  | { type: "audio"; src: string; title?: string }
   | { type: "code"; text: string }
   | { type: "divider" }
   /** Something that could not be turned into a block. It stays in the model, so nothing disappears without being reported. */

@@ -317,3 +317,14 @@ I Mer-panelet, under «Filer», slipper du bilder (png, jpg, webp, gif, avif), l
 - **Publisering** kopierer filene inn i siden (`public/images` for bilder, `public/files` for lyd og pdf) og bytter adressene.
 - **Pull request** til et importert GitHub-prosjekt tar med filene som er brukt: koden endres til `/uploads/<navn>`, og filene legges i `public/uploads/` som egne blobs i samme commit. Dialogen viser dem som «fil du la til».
 - **Oppsett:** kjør `supabase/migrations/20261024240000_pivolar_uploads.sql` i SQL Editor. Uten den sier opplastingen fra seg med en tydelig melding.
+
+## Video og lyd ved import: bare lenker
+
+Et nettsted med mye video og lyd (for eksempel slow-blues.com) fyller ikke lagringen. Ingen video- eller lydfiler kopieres (`src/lib/import/embeds.ts`):
+
+- **YouTube** beholdes som adresse, og siden viser videoens eget bilde (`i.ytimg.com`, lest fra YouTube når siden vises, ikke lagret hos oss) med en avspillingsknapp. Spilleren (`youtube-nocookie.com`) lastes først når du trykker, så siden er lett, personvennlig og ingenting spiller av seg selv.
+- **Vimeo** gir ikke bildet uten å spørre, så det spørres én gang ved import (Vimeos åpne oEmbed-adresse, høyst 15 oppslag og 15 sekunder), og bare adressen til bildet på Vimeos egne servere beholdes. Feiler oppslaget, blir det en vanlig spiller.
+- **Videofiler og lydfiler** (`<video>`, `<audio>`, WordPress sine video- og lydblokker) beholdes som adresser og spilles av fra det gamle nettstedet, uten forhåndslasting (`preload="none"`), med posterbildet som adresse. Mp4 og mp3 velges først når flere formater finnes.
+- **Mediebiblioteket** i WordPress: video- og lydfiler regnes ikke som bilder og kopieres aldri. Bilder som ingen side viser, hentes heller ikke, så lagringen går bare til bilder du faktisk ser.
+- **SoundCloud, Spotify, kart og andre rammer** forblir lenker eller kart som før.
+- Rapporten (og `IMPORT.md`) sier hvor mange videoer og lydfiler som bare er lenket, og at de spilles fra det gamle nettstedet så lenge det er på nett. Skal filene bli i prosjektet, legger du dem til under Filer i Mer-panelet.

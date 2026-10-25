@@ -38,6 +38,12 @@ const pages: Page[] = [
     { type: "divider" },
     { type: "unknown", reason: "form", text: "Navn E-post" },
   ] }),
+  page({ id: "page-3", path: "/musikk", title: "Musikk", blocks: [
+    { type: "embed", provider: "youtube", src: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ", thumb: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", title: "Live" },
+    { type: "embed", provider: "vimeo", src: "https://player.vimeo.com/video/123456789" },
+    { type: "video", src: "https://old.no/media/film.mp4", poster: "https://old.no/poster.jpg", title: "Konsert" },
+    { type: "audio", src: "https://old.no/lyd/sang.mp3", title: "Sangen" },
+  ] }),
   page({ id: "page-2", path: "/kontakt", title: "Kontakt", blocks: [{ type: "paragraph", html: "Ring oss." }] }),
   page({ id: "post-7", kind: "post", path: "/2026/03/nytt-brygg", title: "Nytt brygg", date: "2026-03-05T10:00:00", excerpt: "Prøv det", blocks: [{ type: "paragraph", html: "Prøv det." }] }),
 ];
@@ -64,7 +70,7 @@ const files = project.files;
 // --- the files
 {
   for (const f of ["/App.tsx", "/styles.css", "/brand.json", "/IMPORT.md", "/lib/types.ts", "/lib/inline.tsx", "/components/Blocks.tsx", "/components/Layout.tsx", "/components/SiteRoutes.tsx", "/components/PageView.tsx", "/components/Home.tsx", "/components/Seo.tsx", "/content/site.ts", "/content/index.ts", "/content/pages/page-1.ts", "/content/pages/page-2.ts", "/content/pages/post-7.ts"]) assert.ok(f in files, `${f} exists`);
-  assert.deepEqual(project.report, { pages: 2, posts: 1, routes: 3, images: 2, unknownBlocks: 1, homeFromPosts: true });
+  assert.deepEqual(project.report, { pages: 3, posts: 1, routes: 4, images: 2, unknownBlocks: 1, homeFromPosts: true });
   assert.ok(Object.values(files).every((c) => c.length < 200_000), "no file comes near the size limit");
   const home = files["/content/pages/page-1.ts"]!;
   assert.ok(home.includes(url(A)) && home.includes(url(B)), "pictures point at the storage addresses, so the preview shows them and publishing can copy them");
@@ -77,7 +83,7 @@ const files = project.files;
   assert.ok(site.includes('"href":"/"'), "the front page is always in the menu");
   assert.deepEqual(JSON.parse(files["/brand.json"]!).name, "Kaffebar");
   const notes = files["/IMPORT.md"]!;
-  assert.match(notes, /3 sider og innlegg og 2 bilder/);
+  assert.match(notes, /4 sider og innlegg og 2 bilder/);
   assert.match(notes, /Om oss – Kaffebar: form \(Navn E-post\)/);
   assert.match(notes, /Contact Form 7 \(1 sider\)/);
   assert.match(notes, /Et varsel/);
@@ -172,6 +178,14 @@ const render = (location: string) => renderToString(React.createElement(StaticRo
   assert.match(front, /Brent lokalt/);
   assert.match(front, /<a[^>]*href="\/2026\/03\/nytt-brygg"[^>]*>Nytt brygg<\/a>/);
   assert.match(front, /Prøv det/);
+  // Video and sound: nothing is copied, and nothing heavy is loaded before play is pressed
+  const music = render("/musikk");
+  assert.match(music, /<button[^>]*aria-label="Spill av: Live"[\s\S]*?<img src="https:\/\/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/hqdefault\.jpg"/, "a video from YouTube is its own picture with a play button");
+  assert.equal((music.match(/<iframe/g) ?? []).length, 1, "only the video without a picture (Vimeo, not asked) is a player from the start");
+  assert.match(music, /<iframe[^>]*src="https:\/\/player\.vimeo\.com\/video\/123456789"/);
+  assert.match(music, /<video[^>]*controls=""[^>]*preload="none"[^>]*poster="https:\/\/old\.no\/poster\.jpg"[\s\S]*?<source src="https:\/\/old\.no\/media\/film\.mp4"/, "a video file is played from the old site");
+  assert.match(music, /<audio[^>]*controls=""[^>]*preload="none"[^>]*src="https:\/\/old\.no\/lyd\/sang\.mp3"/);
+  assert.doesNotMatch(music, /autoplay=1|autoplay=""/, "nothing plays by itself");
   // An address that does not exist
   assert.match(render("/finnes-ikke"), /Fant ikke siden/);
 }
@@ -325,7 +339,7 @@ const render = (location: string) => renderToString(React.createElement(StaticRo
 
   const site = prepare("pivolar-prerender-test", model, "https://kaffe.example");
   assert.equal(site.run.status, 0, site.run.stderr);
-  assert.match(site.run.stdout, /prerender: 4 pages/);
+  assert.match(site.run.stdout, /prerender: 5 pages/);
   const about = site.read("om-oss/index.html");
   assert.match(about, /<title>Om oss \| Kaffebar<\/title>/, "its own title");
   assert.match(about, /<meta name="description" content="Vi brenner kaffe" \/>/, "its own description");
@@ -340,7 +354,7 @@ const render = (location: string) => renderToString(React.createElement(StaticRo
   assert.match(site.read("2026/03/nytt-brygg/index.html"), /5\. mars 2026/);
   assert.match(site.read("index.html"), /<link rel="canonical" href="https:\/\/kaffe\.example\/" \/>[\s\S]*Brent lokalt/, "the front page, made from the posts");
   const sitemap = site.read("sitemap.xml");
-  assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]), ["https://kaffe.example/om-oss", "https://kaffe.example/kontakt", "https://kaffe.example/2026/03/nytt-brygg", "https://kaffe.example/"], "every page is in the sitemap");
+  assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]), ["https://kaffe.example/om-oss", "https://kaffe.example/musikk", "https://kaffe.example/kontakt", "https://kaffe.example/2026/03/nytt-brygg", "https://kaffe.example/"], "every page is in the sitemap");
 
   // Without a known address no page claims the front page as its own
   const bare = prepare("pivolar-prerender-bare", model, "");

@@ -7,6 +7,8 @@ import { htmlToBlocks, navFrom } from "../src/lib/import/clean.ts";
 import { countBlocks, imagesIn, type Block } from "../src/lib/import/model.ts";
 import { createRobots, ImportFetchError, makeSend, publicLookup, robotsAllows, safeFetch, type SafeResponse, type Send } from "../src/lib/import/safe-fetch.ts";
 import { roughTokens, toSkeleton } from "../src/lib/import/skeleton.ts";
+import { enrichEmbeds, linkedMedia, linkedMediaNote } from "../src/lib/import/embeds.ts";
+import { vimeoId, youtubeId } from "../src/lib/import/clean.ts";
 import { fetchWordPress, IMPORT_LIMITS, originalOf, probeWordPress, siteBase } from "../src/lib/import/wordpress.ts";
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -194,7 +196,8 @@ const rejects = async (promise: Promise<unknown>, code: string, message = code) 
   assert.ok(blocks.some((b) => b.type === "unknown" && b.reason === "form"), "a form is reported, not copied");
   assert.ok(blocks.some((b) => b.type === "unknown" && b.reason === "shortcode:gallery"), "a leftover shortcode is reported");
   assert.ok(blocks.some((b) => b.type === "paragraph" && b.html === "Pakket inn"), "layout wrappers are dropped and the content stays");
-  assert.ok(blocks.some((b) => b.type === "unknown" && b.reason === "video"));
+  // A video file is kept as its address, not as a file
+  assert.deepEqual(blocks.find((b) => b.type === "video"), { type: "video", src: new URL("/v.mp4", base).toString() });
   assert.ok(!blocks.some((b) => b.type === "paragraph" && b.html.trim() === ""), "empty paragraphs vanish");
   assert.ok(signals.includes("Divi") && signals.includes("Contact Form 7") && signals.includes("form"));
   assert.ok(images.includes("https://example.no/bilder/kontor-1024x683.jpg") && images.includes("https://cdn.example/bilde.png"));
@@ -263,6 +266,8 @@ const wpPages = [
 const wpPosts = [{ id: 7, slug: "nytt-brygg", link: `${SITE}/2026/03/nytt-brygg/`, title: title("Nytt brygg"), content: { rendered: `<p>Prøv det.</p><img src="${SITE}/wp-content/uploads/2026/03/ekstern.png" alt="">`, protected: false }, excerpt: title("<p>Prøv</p>"), parent: 0, featured_media: 0 }];
 const wpMedia = [
   { id: 10, source_url: `${SITE}/wp-content/uploads/2026/01/kontor.jpg`, mime_type: "image/jpeg", alt_text: "Kontor &amp; bord", media_details: { width: 1200, height: 800 } },
+  { id: 12, source_url: `${SITE}/wp-content/uploads/2026/01/konsert.mp3`, mime_type: "audio/mpeg", alt_text: "", media_details: {} },
+  { id: 13, source_url: `${SITE}/wp-content/uploads/2026/01/film.mp4`, mime_type: "video/mp4", alt_text: "", media_details: {} },
   { id: 11, source_url: `${SITE}/wp-content/uploads/2026/01/ubrukt.png`, mime_type: "image/png", alt_text: "", media_details: { width: 100, height: 100 } },
 ];
 const HOME = `<html lang="nb-NO"><head><title>Kaffebar</title><meta name="generator" content="WordPress 6.6"><meta name="theme-color" content="#111111"><link rel="stylesheet" href="/wp-content/themes/kaffe/style.css"><link rel="stylesheet" href="https://cdn.evil.example/x.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap"></head><body><header><nav><a href="/">Hjem</a><a href="/om-oss/">Om oss</a></nav></header></body></html>`;
@@ -300,7 +305,7 @@ function wpSite(options: { rest?: boolean; robots?: string; wordpress?: boolean;
   const probe = await probeWordPress("example.no/", { fetch: site.fetcher });
   assert.deepEqual([probe.cms, probe.rest, probe.restBase, probe.base], ["wordpress", true, `${SITE}/wp-json`, SITE]);
   assert.deepEqual([probe.name, probe.description, probe.language], ["Kaffebar & Co", "Brent lokalt", "nb-NO"]);
-  assert.deepEqual(probe.counts, { pages: 4, posts: 1, media: 2 });
+  assert.deepEqual(probe.counts, { pages: 4, posts: 1, media: 4 });
 
   // The API shut, but the page says WordPress
   const closed = await probeWordPress(SITE, { fetch: wpSite({ rest: false }).fetcher });
@@ -336,6 +341,8 @@ function wpSite(options: { rest?: boolean; robots?: string; wordpress?: boolean;
   assert.deepEqual([model.name, model.language, model.truncated], ["Kaffebar & Co", "nb-NO", false]);
   assert.deepEqual(model.pages.map((p) => p.id), ["page-1", "page-2", "post-7"], "a protected page and a page robots forbids are left out");
   assert.match(model.warnings.join(" "), /1 passordbeskyttede sider/);
+  assert.ok(!model.media.some((m) => /konsert\.mp3|film\.mp4/.test(m.sourceUrl)), "sound and video in the library are never copied");
+  assert.match(model.warnings.join(" "), /2 video- og lydfiler i mediebiblioteket er ikke kopiert/);
   assert.match(model.warnings.join(" "), /1 sider ble hoppet over fordi robots\.txt/);
   const about = model.pages[0]!;
   assert.deepEqual([about.kind, about.path, about.slug, about.title, about.parent], ["page", "/om-oss", "om-oss", "Om oss – Kaffebar", null], "the title is plain text, with the dash decoded");
@@ -435,6 +442,62 @@ function wpSite(options: { rest?: boolean; robots?: string; wordpress?: boolean;
   assert.match(safe, /assertPublicUrl/, "it reuses the address check that already exists");
   assert.match(safe, /lookup: lookup as never/, "the connection is made with the checked lookup");
   assert.doesNotMatch(safe, /\bfetch\(/, "it does not use the global fetch, which would skip the check at connect time");
+}
+
+
+// --- video and sound are kept as links, not as files
+{
+  const page = "https://old.no/blogg/";
+  // YouTube, from any of its addresses
+  for (const src of ["https://www.youtube.com/embed/dQw4w9WgXcQ", "https://youtu.be/dQw4w9WgXcQ", "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=5", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0", "https://www.youtube.com/shorts/dQw4w9WgXcQ"]) assert.equal(youtubeId(src), "dQw4w9WgXcQ", src);
+  for (const bad of ["https://www.youtube.com/embed/kort", "https://evil.example/embed/dQw4w9WgXcQ", "ikke en adresse", "https://www.youtube.com/watch?v=" + "x".repeat(40)]) assert.equal(youtubeId(bad), null, bad);
+  assert.equal(vimeoId("https://player.vimeo.com/video/123456789"), "123456789");
+  assert.equal(vimeoId("https://vimeo.com/123456789/abcdef"), "123456789");
+  assert.equal(vimeoId("https://evil.example/123456789"), null);
+
+  const { blocks } = htmlToBlocks(
+    `<iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ?feature=oembed"></iframe>
+     <iframe src="https://player.vimeo.com/video/123456789?h=abc"></iframe>
+     <iframe src="https://w.soundcloud.com/player/?url=x"></iframe>
+     <video controls poster="/poster.jpg" title="Konsert"><source src="/media/film.webm" type="video/webm"><source src="/media/film.mp4" type="video/mp4"></video>
+     <audio controls><source src="https://old.no/lyd/sang.ogg" type="audio/ogg"><source src="/lyd/sang.mp3" type="audio/mpeg"></audio>
+     <video src="javascript:alert(1)"></video>
+     <audio src="data:audio/mp3;base64,AAAA"></audio>
+     <video controls></video>`,
+    page,
+  );
+  assert.deepEqual(blocks[0], { type: "embed", provider: "youtube", src: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ", thumb: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg" }, "a video shows its own picture, read from YouTube");
+  assert.deepEqual(blocks[1], { type: "embed", provider: "vimeo", src: "https://player.vimeo.com/video/123456789" });
+  assert.equal(blocks[2]!.type === "embed" && blocks[2]!.provider, "other");
+  assert.deepEqual(blocks[3], { type: "video", src: "https://old.no/media/film.mp4", poster: "https://old.no/poster.jpg", title: "Konsert" }, "the file stays on the old site; mp4 is chosen first");
+  assert.deepEqual(blocks[4], { type: "audio", src: "https://old.no/lyd/sang.mp3" });
+  assert.deepEqual(blocks.slice(5).map((b) => b.type), ["unknown", "unknown", "unknown"], "an address that is not http(s) is not kept");
+  assert.ok(!(JSON.stringify(blocks).match(/javascript:|data:audio/) ?? []).length);
+
+  // Vimeo's picture is asked for once, and only a picture on Vimeo's own servers is kept
+  const pages = [{ blocks: [blocks[1]!, { type: "columns", columns: [[{ type: "embed", provider: "vimeo", src: "https://player.vimeo.com/video/987654321" }]] }] }] as never[];
+  const asked: string[] = [];
+  const reply = (body: unknown, ok = true) => ({ ok, status: ok ? 200 : 404, json: () => body }) as never;
+  const applied = await enrichEmbeds(pages, async (url) => {
+    asked.push(url);
+    return url.includes("123456789") ? reply({ thumbnail_url: "https://i.vimeocdn.com/video/1-d_640", title: "Min <b>film</b>" }) : reply({ thumbnail_url: "https://evil.example/x.jpg", title: "x" });
+  });
+  assert.equal(applied, 1);
+  assert.deepEqual(asked.map((u) => new URL(u).pathname), ["/api/oembed.json", "/api/oembed.json"]);
+  assert.deepEqual([blocks[1]!.type === "embed" && blocks[1]!.thumb, blocks[1]!.type === "embed" && blocks[1]!.title], ["https://i.vimeocdn.com/video/1-d_640", "Min bfilm/b"], "tags are stripped from the title");
+  assert.equal(await enrichEmbeds(pages, async () => { throw new Error("nede"); }), 0, "a lookup that fails changes nothing, and a video that already has its picture is not asked about again");
+  const many = Array.from({ length: 30 }, (_, i) => ({ type: "embed", provider: "vimeo", src: `https://player.vimeo.com/video/${100000 + i}` }));
+  let lookups = 0;
+  await enrichEmbeds([{ blocks: many }] as never[], async () => (lookups++, reply({}, false)));
+  assert.equal(lookups, 15, "no more lookups than the limit");
+
+  // What the owner is told
+  const mixed = [{ blocks: [...blocks.slice(0, 5), { type: "video", src: "https://old.no/b.mp4" }] }] as never[];
+  assert.deepEqual(linkedMedia(mixed), { video: 2, audio: 1, hosted: 2 });
+  assert.match(linkedMediaNote(mixed)!, /2 YouTube- og Vimeo-videoer vises med sitt eget bilde/);
+  assert.match(linkedMediaNote(mixed)!, /2 videofiler og 1 lydfil er bare lenket og spilles fra det gamle nettstedet/);
+  assert.match(linkedMediaNote(mixed)!, /Filer i Mer-panelet/);
+  assert.equal(linkedMediaNote([{ blocks: [{ type: "paragraph", html: "x" }] }] as never[]), null);
 }
 
 console.log("import: all ok");

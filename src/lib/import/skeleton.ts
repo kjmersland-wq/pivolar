@@ -63,6 +63,12 @@ export function toSkeleton(blocks: Block[]): Skeleton {
         case "embed":
           lines.push(`${pad}embed(${b.provider}) {${slot("l", b.src)}}`);
           break;
+        case "video":
+          lines.push(`${pad}video {${slot("l", b.src)}}`);
+          break;
+        case "audio":
+          lines.push(`${pad}audio {${slot("l", b.src)}}`);
+          break;
         case "code":
           lines.push(`${pad}code {${slot("t", b.text)}}`);
           break;

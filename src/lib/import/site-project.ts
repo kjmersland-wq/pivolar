@@ -30,7 +30,9 @@ const TYPES = `export type Block =
   | { type: "button"; label: string; href: string }
   | { type: "columns"; columns: Block[][] }
   | { type: "table"; header: boolean; rows: string[][] }
-  | { type: "embed"; provider: "youtube" | "vimeo" | "map" | "other"; src: string }
+  | { type: "embed"; provider: "youtube" | "vimeo" | "map" | "other"; src: string; thumb?: string; title?: string }
+  | { type: "video"; src: string; poster?: string; title?: string }
+  | { type: "audio"; src: string; title?: string }
   | { type: "code"; text: string }
   | { type: "divider" }
   | { type: "unknown"; reason: string; text: string };
@@ -119,7 +121,8 @@ export function Inline({ html }: { html: string }) {
 }
 `;
 
-const BLOCKS = `import { Link } from "react-router-dom";
+const BLOCKS = `import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Inline } from "../lib/inline";
 import type { Block } from "../lib/types";
 
@@ -138,7 +141,8 @@ function Picture({ src, alt, width, height }: { src: string; alt: string; width?
   return <img src={src} alt={alt} width={width} height={height} loading="lazy" decoding="async" className="h-auto max-w-full rounded-xl" />;
 }
 
-function Embed({ provider, src }: { provider: "youtube" | "vimeo" | "map" | "other"; src: string }) {
+function Embed({ provider, src, thumb, title }: { provider: "youtube" | "vimeo" | "map" | "other"; src: string; thumb?: string | undefined; title?: string | undefined }) {
+  const [playing, setPlaying] = useState(false);
   // Only video and maps are shown inside the page. Anything else is a link, so a page cannot bring in a frame of its own choosing.
   if (provider === "other") {
     return (
@@ -149,9 +153,25 @@ function Embed({ provider, src }: { provider: "youtube" | "vimeo" | "map" | "oth
       </p>
     );
   }
+  // A video is a picture with a play button. The player is only loaded when it is pressed, so the page stays light and nothing is copied.
+  if (thumb && !playing && provider !== "map") {
+    return (
+      <button type="button" onClick={() => setPlaying(true)} aria-label={"Spill av: " + (title || "video")} className="group relative block aspect-video w-full overflow-hidden rounded-xl bg-slate-900">
+        <img src={thumb} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover opacity-90 transition group-hover:opacity-100" />
+        <span className="absolute inset-0 grid place-items-center">
+          <span className="grid size-16 place-items-center rounded-full bg-black/70 text-white">
+            <svg viewBox="0 0 24 24" className="ml-1 size-7" aria-hidden="true">
+              <path d="M8 5v14l11-7z" fill="currentColor" />
+            </svg>
+          </span>
+        </span>
+      </button>
+    );
+  }
+  const address = playing ? src + (src.includes("?") ? "&" : "?") + "autoplay=1" : src;
   return (
     <div className="aspect-video w-full overflow-hidden rounded-xl bg-slate-100">
-      <iframe src={src} title={provider === "map" ? "Kart" : "Video"} loading="lazy" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" className="h-full w-full border-0" />
+      <iframe src={address} title={provider === "map" ? "Kart" : title || "Video"} loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" className="h-full w-full border-0" />
     </div>
   );
 }
@@ -244,7 +264,25 @@ function One({ block }: { block: Block }) {
         </div>
       );
     case "embed":
-      return <Embed provider={block.provider} src={block.src} />;
+      return <Embed provider={block.provider} src={block.src} thumb={block.thumb} title={block.title} />;
+    case "video":
+      // The file stays on the old site and is played from there. Nothing is loaded before play is pressed.
+      return (
+        <video controls preload="none" playsInline poster={block.poster} aria-label={block.title} className="aspect-video w-full rounded-xl bg-black">
+          <source src={block.src} />
+          <a href={block.src} target="_blank" rel="noopener noreferrer" className="underline">
+            Åpne videoen
+          </a>
+        </video>
+      );
+    case "audio":
+      return (
+        <audio controls preload="none" src={block.src} aria-label={block.title} className="w-full">
+          <a href={block.src} target="_blank" rel="noopener noreferrer" className="underline">
+            Åpne lydfilen
+          </a>
+        </audio>
+      );
     case "code":
       return <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-sm text-slate-100"><code>{block.text}</code></pre>;
     case "divider":

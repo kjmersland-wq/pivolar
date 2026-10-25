@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { htmlToBlocks, navFrom } from "./clean.ts";
 import { countBlocks, imagesIn, rewriteImages, type Media, type Page, type SiteModel } from "./model.ts";
 import { extractTheme, lostFonts, stylesheetLinks, THEME_LIMITS, type Theme } from "./theme.ts";
+import { enrichEmbeds, linkedMediaNote } from "./embeds.ts";
 import { RENDER_LIMITS } from "./rendered.ts";
 import { createRobots, ImportFetchError, safeFetch, type FetchLimits, type SafeResponse } from "./safe-fetch.ts";
 
@@ -213,10 +214,16 @@ export async function fetchWordPress(input: string, probe: Probe, deps: Deps = {
     warnings.push(`Bare de første ${IMPORT_LIMITS.media} bildene i mediebiblioteket ble hentet.`);
   }
   const mediaById = new Map<string, Media>();
+  let notCopied = 0;
   const bySource = new Map<string, Media>();
   for (const raw of mediaList.items) {
     const sourceUrl = typeof raw.source_url === "string" ? raw.source_url : "";
     if (!sourceUrl) continue;
+    // Video and sound files are not copied. The ones a page shows are kept as links (see embeds.ts).
+    if (/^(video|audio)\//.test(typeof raw.mime_type === "string" ? raw.mime_type : "")) {
+      notCopied++;
+      continue;
+    }
     const details = asRecord(raw.media_details);
     const width = Number(details.width);
     const height = Number(details.height);
@@ -332,6 +339,11 @@ export async function fetchWordPress(input: string, probe: Probe, deps: Deps = {
     unknownBlocks += c.unknown;
   }
   if (unknownBlocks > 0) warnings.push(`${unknownBlocks} deler (skjemaer, video, kortkoder og lignende) kunne ikke gjøres om til innhold, og må lages på nytt.`);
+  // Video from YouTube and Vimeo gets its own picture, and video and sound files stay on the old site as links.
+  await enrichEmbeds(pages, fetcher).catch(() => 0);
+  const linked = linkedMediaNote(pages);
+  if (linked) warnings.push(linked);
+  if (notCopied > 0) warnings.push(`${notCopied} video- og lydfiler i mediebiblioteket er ikke kopiert (bare de som vises på sidene er lenket).`);
   const plugins = [...pluginCount.entries()].map(([name, n]) => ({ name, pages: n })).sort((a, b) => b.pages - a.pages);
 
   return {

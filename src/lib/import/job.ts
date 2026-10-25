@@ -43,7 +43,8 @@ export async function runImagesStep(db: Db, userId: string, jobId: string, deps:
   const model = job.model as SiteModel;
   const rows = await loadRows(db, jobId);
   const handled = new Set(rows.map((r) => r.source_url));
-  const urls = [...new Set(model.media.map((m) => m.sourceUrl))];
+  // Only pictures a page shows are fetched. A library full of unused pictures, sound and video does not fill the storage.
+  const urls = [...new Set(model.media.filter((m) => m.usedBy.length > 0 && (!m.mime || m.mime.startsWith("image/"))).map((m) => m.sourceUrl))];
   // More pictures than the limit: the rest are given up on, once, and reported.
   const inLimit = urls.slice(0, MEDIA_LIMITS.count);
   const beyond = urls.slice(MEDIA_LIMITS.count).filter((u) => !handled.has(u));

@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { htmlToBlocks, navFrom } from "./clean.ts";
 import { countBlocks, imagesIn, type Media, type Page, type SiteModel } from "./model.ts";
+import { enrichEmbeds, linkedMediaNote } from "./embeds.ts";
 import { createRobots, ImportFetchError, safeFetch } from "./safe-fetch.ts";
 import { lostFonts } from "./theme.ts";
 import { readTheme, siteBase, type Fetcher } from "./wordpress.ts";
@@ -235,6 +236,10 @@ export async function crawlRendered(input: string, probe: RenderProbe, deps: Ren
       const lost = lostFonts(theme);
       if (lost.length) warnings.push(`Skrifttypene ${lost.join(", ")} lastes fra det gamle nettstedet og følger ikke med. Nettstedet bruker en lignende i stedet.`);
     }
+
+    await enrichEmbeds(pages, fetcher).catch(() => 0);
+    const linked = linkedMediaNote(pages);
+    if (linked) warnings.push(linked);
 
     let blocks = 0;
     let unknownBlocks = 0;

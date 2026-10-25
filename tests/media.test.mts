@@ -294,7 +294,7 @@ function memoryDb(initialQuota = 0) {
 {
   // More pictures than the limit: the rest is given up on, once, and says why
   const many = Array.from({ length: MEDIA_LIMITS.count + 3 }, (_, i) => `https://x/${i}.png`);
-  const model = { source: "wordpress", url: "https://x", name: "X", description: "", language: null, nav: [], pages: [], media: many.map((u, i) => ({ id: String(i), sourceUrl: u, mime: "image/png", alt: "", usedBy: [] })), plugins: [], warnings: [], truncated: false, stats: { pages: 0, posts: 0, media: many.length, blocks: 0, unknownBlocks: 0, requests: 0, ms: 0 } } as SiteModel;
+  const model = { source: "wordpress", url: "https://x", name: "X", description: "", language: null, nav: [], pages: [], media: many.map((u, i) => ({ id: String(i), sourceUrl: u, mime: "image/png", alt: "", usedBy: ["page-1"] })), plugins: [], warnings: [], truncated: false, stats: { pages: 0, posts: 0, media: many.length, blocks: 0, unknownBlocks: 0, requests: 0, ms: 0 } } as SiteModel;
   const { db, tables } = memoryDb();
   const jobId = await saveJob(db, "u1", "https://x", model);
   const pic = await bytesOf(50);
@@ -308,10 +308,27 @@ function memoryDb(initialQuota = 0) {
 }
 
 {
+  // Pictures no page shows, and sound and video, are never fetched
+  const model = { source: "wordpress", url: "https://x", name: "X", description: "", language: null, nav: [], pages: [], media: [
+    { id: "1", sourceUrl: "https://x/vist.png", mime: "image/png", alt: "", usedBy: ["page-1"] },
+    { id: "2", sourceUrl: "https://x/ubrukt.png", mime: "image/png", alt: "", usedBy: [] },
+    { id: "3", sourceUrl: "https://x/sang.mp3", mime: "audio/mpeg", alt: "", usedBy: ["page-1"] },
+    { id: "4", sourceUrl: "https://x/film.mp4", mime: "video/mp4", alt: "", usedBy: ["page-1"] },
+  ], plugins: [], warnings: [], truncated: false, stats: { pages: 0, posts: 0, media: 4, blocks: 0, unknownBlocks: 0, requests: 0, ms: 0 } } as SiteModel;
+  const { db } = memoryDb();
+  const jobId = await saveJob(db, "u1", "https://x", model);
+  const fetched: string[] = [];
+  const pic = await bytesOf(50);
+  const report = await runImagesStep(db, "u1", jobId, { download: async (u: string) => (fetched.push(u), pic), allowed: async () => true, quotaBytes: 1e12 });
+  assert.deepEqual(fetched, ["https://x/vist.png"], "only the picture a page shows is fetched");
+  assert.equal(report.total, 1);
+}
+
+{
   // The user's space: when it is used up, the job ends and the pictures that did not fit are marked
   const urls = ["https://x/1.png", "https://x/2.png"];
   const pic = await bytesOf(60);
-  const model = { source: "wordpress", url: "https://x", name: "X", description: "", language: null, nav: [], pages: [], media: urls.map((u, i) => ({ id: String(i), sourceUrl: u, mime: "image/png", alt: "", usedBy: [] })), plugins: [], warnings: [], truncated: false, stats: { pages: 0, posts: 0, media: 2, blocks: 0, unknownBlocks: 0, requests: 0, ms: 0 } } as SiteModel;
+  const model = { source: "wordpress", url: "https://x", name: "X", description: "", language: null, nav: [], pages: [], media: urls.map((u, i) => ({ id: String(i), sourceUrl: u, mime: "image/png", alt: "", usedBy: ["page-1"] })), plugins: [], warnings: [], truncated: false, stats: { pages: 0, posts: 0, media: 2, blocks: 0, unknownBlocks: 0, requests: 0, ms: 0 } } as SiteModel;
   const { db, tables } = memoryDb(1_000);
   const jobId = await saveJob(db, "u1", "https://x", model);
   const report = await runImagesStep(db, "u1", jobId, { download: async () => pic, allowed: async () => true, quotaBytes: 1_000 });

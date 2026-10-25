@@ -126,6 +126,31 @@ const tidy = (html: string) => html.replace(/(<br>\s*){3,}/g, "<br><br>").replac
 
 type Ctx = { base: string; signals: Set<string>; images: string[] };
 
+/** The id of a YouTube video from any of its addresses, or null. */
+export function youtubeId(src: string): string | null {
+  try {
+    const url = new URL(src);
+    const host = url.hostname.replace(/^www\./, "");
+    let id: string | null = null;
+    if (host === "youtu.be") id = url.pathname.slice(1).split("/")[0] ?? null;
+    else if (/(^|\.)youtube(-nocookie)?\.com$/.test(host)) id = url.pathname.startsWith("/embed/") || url.pathname.startsWith("/shorts/") || url.pathname.startsWith("/live/") ? (url.pathname.split("/")[2] ?? null) : url.searchParams.get("v");
+    return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The id of a Vimeo video, or null. */
+export function vimeoId(src: string): string | null {
+  try {
+    const url = new URL(src);
+    if (!/(^|\.)vimeo\.com$/.test(url.hostname)) return null;
+    return /(?:^|\/)(\d{5,12})(?:\/|$)/.exec(url.pathname)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function embedFor(src: string): Block {
   const host = (() => {
     try {
@@ -135,7 +160,32 @@ function embedFor(src: string): Block {
     }
   })();
   const provider = /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(host) ? "youtube" : /(^|\.)vimeo\.com$/.test(host) ? "vimeo" : /(^|\.)google\.[a-z.]+$/.test(host) && /maps/.test(src) ? "map" : "other";
+  // A video is kept as an address and the video's own picture, never as a file. The picture is read from YouTube when the page is shown.
+  if (provider === "youtube") {
+    const id = youtubeId(src);
+    if (id) return { type: "embed", provider, src: `https://www.youtube-nocookie.com/embed/${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg` };
+  }
+  if (provider === "vimeo") {
+    const id = vimeoId(src);
+    if (id) return { type: "embed", provider, src: `https://player.vimeo.com/video/${id}` };
+  }
   return { type: "embed", provider, src };
+}
+
+/** A video or sound element: the address of the file (or its first source) and the poster, as links. Nothing is downloaded. */
+function mediaBlock(n: Node, kind: "video" | "audio", ctx: Ctx): Block[] {
+  const a = n.attribs ?? {};
+  const sources = descendants(n, "source").map((s) => ({ src: s.attribs?.src, type: s.attribs?.type ?? "" }));
+  // The format every browser plays comes first: mp4 for video, mp3 or aac for sound.
+  const best = kind === "video" ? /mp4/i : /mpeg|mp3|mp4|aac/i;
+  const known = kind === "video" ? /mp4|webm|ogg/i : /mpeg|mp3|mp4|aac|ogg|wav|webm/i;
+  const chosen = sources.find((s) => s.src && best.test(s.type)) ?? sources.find((s) => s.src && known.test(s.type)) ?? sources.find((s) => s.src);
+  const src = absolute(a.src || chosen?.src, ctx.base);
+  if (!src) return [{ type: "unknown", reason: kind, text: "" }];
+  const title = (a.title || a["aria-label"] || "").replace(/[<>]/g, "").trim().slice(0, 200);
+  if (kind === "audio") return [{ type: "audio", src, ...(title ? { title } : {}) }];
+  const poster = absolute(a.poster, ctx.base);
+  return [{ type: "video", src, ...(poster ? { poster } : {}), ...(title ? { title } : {}) }];
 }
 
 function listItems(n: Node, base: string): string[] {
@@ -278,6 +328,7 @@ function block(n: Node, ctx: Ctx): Block[] {
       return embedBlocks(n);
     case "video":
     case "audio":
+      return mediaBlock(n, name, ctx);
     case "object":
     case "embed":
       return [{ type: "unknown", reason: name, text: "" }];
