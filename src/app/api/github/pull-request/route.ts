@@ -5,6 +5,8 @@ import { PROTECTED_PATHS } from "@/lib/files";
 import { countChanges, diffImport } from "@/lib/github/changes";
 import { openPullRequest } from "@/lib/github/pr";
 import { downloadBranch, GITHUB_READ_OPTIONS, GitHubImportError } from "@/lib/github/repo";
+import { collectUploads } from "@/lib/uploads/collect";
+import { localizeUploads, uploadsOf } from "@/lib/uploads/rules";
 import { readZip } from "@/lib/zip/read";
 
 export const maxDuration = 120;
@@ -43,13 +45,19 @@ export async function POST(request: Request) {
     // The imported commit is read again, so the comparison does not depend on what the browser remembers.
     const { zip } = await downloadBranch({ owner, repo, branch: baseSha }, token);
     const baseline = readZip(zip, GITHUB_READ_OPTIONS).files;
-    const changes = diffImport(baseline, Object.fromEntries(Object.entries(files).filter(([path]) => !PROTECTED_PATHS.has(path))));
-    const summary = { write: Object.keys(changes.write), remove: changes.remove };
-    if (countChanges(changes) === 0) return NextResponse.json({ error: "Ingen endringer å sende.", ...summary }, { status: 400 });
+    // The files the owner added are copied into the project (public/uploads), and the code that uses them is changed to point there.
+    const list = uploadsOf(files, process.env.NEXT_PUBLIC_SUPABASE_URL);
+    const current = Object.fromEntries(Object.entries(files).filter(([path]) => !PROTECTED_PATHS.has(path)));
+    const localized = localizeUploads(current, list);
+    const changes = diffImport(baseline, localized.files);
+    const summary = { write: Object.keys(changes.write), remove: changes.remove, binary: localized.used.map((u) => u.path) };
+    if (countChanges(changes) + localized.used.length === 0) return NextResponse.json({ error: "Ingen endringer å sende.", ...summary }, { status: 400 });
     if (dryRun) return NextResponse.json(summary);
-    return NextResponse.json({ ...(await openPullRequest(token, { owner, repo, baseBranch, baseSha, ...changes, title, body })), ...summary });
+    const binary = await collectUploads(localized.used);
+    return NextResponse.json({ ...(await openPullRequest(token, { owner, repo, baseBranch, baseSha, ...changes, binary, title, body })), ...summary });
   } catch (error) {
     if (error instanceof GitHubImportError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof Error && /^(Fikk ikke hentet|.* er for stor|.* har en uventet|Filene som skal)/.test(error.message)) return NextResponse.json({ error: error.message }, { status: 502 });
     return NextResponse.json({ error: "Kunne ikke sende endringene til GitHub." }, { status: 500 });
   }
 }

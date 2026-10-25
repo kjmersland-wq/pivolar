@@ -5,7 +5,7 @@ import { ExternalLink, GitPullRequest, Loader2, X } from "lucide-react";
 import type { ImportInfo } from "@/lib/projects";
 import type { FileMap } from "@/lib/files";
 
-type Summary = { write: string[]; remove: string[] };
+type Summary = { write: string[]; remove: string[]; /** Files the owner added (pictures, sound), copied into the project. */ binary?: string[] };
 type Sent = { url: string; branch: string; number: number };
 
 async function call<T>(body: object): Promise<T & { error?: string }> {
@@ -64,7 +64,7 @@ export function PullRequestDialog({ open, github, files, onClose }: { open: bool
     }
   }
 
-  const count = summary ? summary.write.length + summary.remove.length : 0;
+  const count = summary ? summary.write.length + summary.remove.length + (summary.binary?.length ?? 0) : 0;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="pr-title">
       <div className="card flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl p-6">
@@ -105,6 +105,9 @@ export function PullRequestDialog({ open, github, files, onClose }: { open: bool
                   <ul className="space-y-0.5 font-mono text-[12px]">
                     {summary.write.slice(0, 30).map((path) => (
                       <li key={path}>+ {path}</li>
+                    ))}
+                    {(summary.binary ?? []).slice(0, 30).map((path) => (
+                      <li key={path}>+ {path} (fil du la til)</li>
                     ))}
                     {summary.remove.slice(0, 30).map((path) => (
                       <li key={path} className="text-red-400">

@@ -307,3 +307,13 @@ I Mer-panelet åpner «Domene» en dialog som finner domener som passer til pros
 Et repo er ikke lenger for stort fordi arkivet er stort. Pivolar leser arkivet mens det kommer inn, en fil om gangen (`src/lib/github/thin.ts`), og holder bare det som kan beholdes: tekst- og kodefiler under 150 KB. Bilder, lyd, video, avhengigheter, byggemapper og store datafiler blir i repoet og står i rapporten (de 200 første enkeltvis, resten talt opp). Det som holdes, pakkes i et lite ZIP som går gjennom nøyaktig de samme kontrollene som en opplastet ZIP: stier, størrelser, bare tekst og filer som kan inneholde hemmeligheter. Grensene er 500 MB for repoet og 400 MB lest fra nettet, innen 100 sekunder. Lenger kommer du med ZIP eller et mindre repo.
 
 **Du mister ikke noe:** det du redigerer og legger til er tekstfiler, og endringene går som pull request mot repoet, der alt annet blir som det er. For forhåndsvisningen av et prosjekt som kjører på serveren klones et offentlig repo inne i den isolerte maskinen (hele repoet, uansett størrelse, uten at noen nøkkel er der). Et privat repo kopieres fortsatt inn herfra, med de gamle størrelsesgrensene.
+
+## Legge til bilder, lyd og PDF
+
+I Mer-panelet, under «Filer», slipper du bilder (png, jpg, webp, gif, avif), lyd (mp3, m4a, aac, ogg, wav, webm) og pdf, høyst 25 MB per fil, 10 om gangen, 100 per prosjekt og 1 GB per bruker. Filene går rett fra nettleseren til lagring (`pivolar-uploads`) med en signert adresse som serveren deler ut etter å ha sjekket filtype, navn, størrelse og at du har plass, så ingenting stort går gjennom serveren. Svg, html og alt annet som kan kjøre avvises, både her og av selve bøtta.
+
+- **Listen** over filene ligger som én skjult prosjektfil (`/UPLOADS.json`), på samme måte som Kunnskap: den følger prosjektet til kontoen, vises ikke i kodevisningen, AI-en kan ikke endre den, og den publiseres og eksporteres aldri. Alt i den kontrolleres på nytt når den brukes (adressen må peke inn i Pivolars egen bøtte).
+- **AI-en** får en liste over filene med adresser i hver melding («Bruk bildet hero.jpg i toppseksjonen»), og blir bedt om å bruke adressen slik den står.
+- **Publisering** kopierer filene inn i siden (`public/images` for bilder, `public/files` for lyd og pdf) og bytter adressene.
+- **Pull request** til et importert GitHub-prosjekt tar med filene som er brukt: koden endres til `/uploads/<navn>`, og filene legges i `public/uploads/` som egne blobs i samme commit. Dialogen viser dem som «fil du la til».
+- **Oppsett:** kjør `supabase/migrations/20261024240000_pivolar_uploads.sql` i SQL Editor. Uten den sier opplastingen fra seg med en tydelig melding.

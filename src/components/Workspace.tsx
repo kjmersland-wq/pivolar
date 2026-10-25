@@ -30,6 +30,7 @@ import { UsageMeter } from "@/components/UsageMeter";
 import { saveThumb } from "@/lib/thumbs";
 import { deriveFiles, type UserEdit } from "@/lib/files";
 import { withKnowledge } from "@/lib/knowledge";
+import { uploadsOf, withUploads } from "@/lib/uploads/rules";
 import { getProject, loadEdits, loadImportInfo, loadMessages, saveEdits, saveMessages, takePendingPrompt, updateProject } from "@/lib/projects";
 import { addQueued, loadQueued, removeQueued } from "@/lib/queued";
 import { pullOne } from "@/lib/sync";
@@ -464,6 +465,8 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         messages={messages}
         edits={edits}
         onKnowledge={(text) => setEdits((prev) => withKnowledge(prev, text))}
+        uploads={uploadsOf(files, process.env.NEXT_PUBLIC_SUPABASE_URL)}
+        onUploads={(list) => setEdits((prev) => withUploads(prev, list))}
       />
       <DomainDialog open={domainsOpen} onClose={() => setDomainsOpen(false)} projectId={id} projectName={name} files={files} />
       <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} onCompose={compose} initialName={name} />

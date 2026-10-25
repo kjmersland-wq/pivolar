@@ -2,6 +2,7 @@ import { convertToModelMessages, createUIMessageStreamResponse, generateImage, i
 import { z } from "zod";
 import { chatModel } from "@/lib/ai-model";
 import { knowledgeSection } from "@/lib/knowledge";
+import { uploadsSection } from "@/lib/uploads/rules";
 import { createAnalyzeTool, trimOldAnalyses } from "@/lib/analyze/tool";
 import { buildIndex, readFile, recentPaths, searchFiles, shouldIndex } from "@/lib/context";
 import { detectLoop, withNoteBeforeFinish, type LoopFinding, type StepLike } from "@/lib/guard/loop";
@@ -142,7 +143,7 @@ ${
 - Du skal ikke endre noen filer nå. Diskuter, foreslå og planlegg. Hold svarene korte og konkrete.`
 }
 
-${knowledgeSection(all)}${section}`;
+${knowledgeSection(all)}${uploadsSection(all, process.env.NEXT_PUBLIC_SUPABASE_URL)}${section}`;
 }
 
 /**

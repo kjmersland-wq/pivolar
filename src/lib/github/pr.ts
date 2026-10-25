@@ -16,6 +16,8 @@ export type PullRequestInput = RepoRef & {
   baseSha: string;
   write: FileMap;
   remove: string[];
+  /** New files that are not text (pictures, sound), added as they are. */
+  binary?: { path: string; content: Uint8Array }[];
   title: string;
   body: string;
 };
@@ -53,7 +55,7 @@ export async function openPullRequest(token: string, input: PullRequestInput, fe
   const { owner, repo, baseBranch, baseSha } = input;
   if (!SHA.test(baseSha)) throw new GitHubImportError("Mangler utgangspunktet for endringene (commit). Importer repoet på nytt.", 400);
   if (!BRANCH.test(baseBranch)) throw new GitHubImportError("Ugyldig gren.", 400);
-  if (Object.keys(input.write).length + input.remove.length === 0) throw new GitHubImportError("Ingen endringer å sende.", 400);
+  if (Object.keys(input.write).length + input.remove.length + (input.binary?.length ?? 0) === 0) throw new GitHubImportError("Ingen endringer å sende.", 400);
 
   const call = async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     let response: Response;
@@ -72,7 +74,14 @@ export async function openPullRequest(token: string, input: PullRequestInput, fe
   };
 
   const base = await call<{ tree: { sha: string } }>(`/git/commits/${baseSha}`);
+  // Files that are not text are sent as blobs first, and the tree then points at them.
+  const blobs: { path: string; mode: string; type: string; sha: string }[] = [];
+  for (const file of input.binary ?? []) {
+    const blob = await call<{ sha: string }>("/git/blobs", { method: "POST", body: JSON.stringify({ content: Buffer.from(file.content).toString("base64"), encoding: "base64" }) });
+    blobs.push({ path: file.path.replace(/^\/+/, ""), mode: "100644", type: "blob", sha: blob.sha });
+  }
   const entries = [
+    ...blobs,
     ...Object.entries(input.write).map(([path, content]) => ({ path: path.replace(/^\/+/, ""), mode: "100644", type: "blob", content })),
     // A null sha removes the file from the new tree.
     ...input.remove.map((path) => ({ path: path.replace(/^\/+/, ""), mode: "100644", type: "blob", sha: null })),

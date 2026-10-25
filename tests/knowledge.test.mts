@@ -63,7 +63,7 @@ for (const bad of [null, undefined, 5, {}, []]) assert.equal(cleanKnowledge(bad)
   assert.equal((section.match(/<\/kunnskap>/g) ?? []).length, 1, "the owner's text cannot close the block early");
   assert.match(section, /gir deg ingen nye verktøy/, "and it is told it grants nothing new");
   const chat = read("src/app/api/chat/route.ts");
-  assert.match(chat, /\$\{knowledgeSection\(all\)\}\$\{section\}/, "every message carries the instructions");
+  assert.match(chat, /\$\{knowledgeSection\(all\)\}\$\{uploadsSection\([^)]*\)\}\$\{section\}/, "every message carries the instructions");
 }
 
 // --- the panel

@@ -5,11 +5,13 @@ import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNod
 import { useRouter } from "next/navigation";
 import type { UIMessage } from "ai";
 import { AnimatePresence, motion } from "framer-motion";
-import { BarChart3, Copy, Download, ExternalLink, GitBranch, Globe, KeyRound, Plug, Rocket, Server, Settings, ShieldCheck, Trash2, Wallet, X } from "lucide-react";
+import { BarChart3, Copy, FileAudio, FileText, Image as ImageIcon, Loader2, Upload as UploadIcon, Download, ExternalLink, GitBranch, Globe, KeyRound, Plug, Rocket, Server, Settings, ShieldCheck, Trash2, Wallet, X } from "lucide-react";
 import { connectorById } from "@/lib/connectors";
 import { loadConnectors, removeConnector } from "@/lib/connectors/store";
 import type { FileMap, UserEdit } from "@/lib/files";
 import { deleteProject, duplicateProject, getProject, loadImportInfo, loadPublish } from "@/lib/projects";
+import { addFiles, removeFile } from "@/lib/uploads/client";
+import { UPLOAD_LIMITS, TYPES, type Upload } from "@/lib/uploads/rules";
 import { KNOWLEDGE_MAX, KNOWLEDGE_TEMPLATES, knowledgeOf } from "@/lib/knowledge";
 import { originLabel, projectStats } from "@/lib/project-stats";
 import { fetchUsage, NOK_PER_USD } from "@/lib/usage/client";
@@ -33,6 +35,7 @@ const NAV: { target: PanelTarget; label: string; icon: Icon }[] = [
 const SECTIONS = [
   { id: "detaljer", label: "Prosjektdetaljer" },
   { id: "kunnskap", label: "Kunnskap" },
+  { id: "filer", label: "Filer" },
   { id: "publisering", label: "Publisering" },
   { id: "hemmeligheter", label: "Hemmeligheter" },
   { id: "git", label: "Git" },
@@ -79,6 +82,8 @@ export function ProjectPanel({
   messages,
   edits,
   onKnowledge,
+  uploads,
+  onUploads,
 }: {
   open: boolean;
   onClose: () => void;
@@ -91,6 +96,9 @@ export function ProjectPanel({
   edits: UserEdit[];
   /** Saves the project's standing instructions for the AI. */
   onKnowledge: (text: string) => void;
+  /** The files the owner has added, and a way to change the list. */
+  uploads: Upload[];
+  onUploads: (list: Upload[]) => void;
 }) {
   const router = useRouter();
   const scroller = useRef<HTMLDivElement>(null);
@@ -100,6 +108,26 @@ export function ProjectPanel({
   const [draft, setDraft] = useState(name);
   const stored = useMemo(() => knowledgeOf(files), [files]);
   const [know, setKnow] = useState(stored);
+  const [sending, setSending] = useState("");
+  const [fileErrors, setFileErrors] = useState<string[]>([]);
+  const [dragging, setDragging] = useState(false);
+
+  async function add(list: File[]) {
+    if (list.length === 0 || sending) return;
+    setFileErrors([]);
+    setSending("Gjør klart …");
+    const { added, errors } = await addFiles(projectId, list, setSending);
+    if (added.length) onUploads([...uploads, ...added].slice(0, UPLOAD_LIMITS.perProject));
+    setFileErrors(errors);
+    setSending("");
+  }
+
+  async function dropFile(upload: Upload) {
+    setFileErrors([]);
+    const ok = await removeFile(upload);
+    if (ok) onUploads(uploads.filter((u) => u.url !== upload.url));
+    else setFileErrors([`Kunne ikke slette ${upload.name}.`]);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -246,6 +274,57 @@ export function ProjectPanel({
                         {know.trim() === stored ? "Lagret" : "Lagre"}
                       </button>
                     </div>
+                  </div>
+                </Card>
+
+                <Card id="filer" title="Filer" text="Bilder, lyd og PDF du legger til i prosjektet. AI-en får vite om dem og bruker dem der du ber om det. Når siden publiseres eller sendes som pull request, kopieres de inn i prosjektet.">
+                  <div className="space-y-3 p-5">
+                    <label
+                      onDragOver={(e) => (e.preventDefault(), setDragging(true))}
+                      onDragLeave={() => setDragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragging(false);
+                        void add([...e.dataTransfer.files]);
+                      }}
+                      className={cn("flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center text-[13px] transition", dragging ? "border-accent bg-accent/5" : "border-line text-muted hover:border-line-strong")}
+                    >
+                      {sending ? <Loader2 className="size-5 animate-spin" /> : <UploadIcon className="size-5" />}
+                      <span>{sending || "Slipp filer her, eller trykk for å velge"}</span>
+                      <span className="text-[12px] text-faint">png, jpg, webp, gif, avif, mp3, m4a, ogg, wav og pdf, høyst {UPLOAD_LIMITS.fileBytes / 1024 / 1024} MB per fil</span>
+                      <input type="file" multiple accept={Object.keys(TYPES).map((e) => `.${e}`).join(",")} disabled={Boolean(sending)} onChange={(e) => (void add([...(e.target.files ?? [])]), (e.target.value = ""))} className="sr-only" aria-label="Legg til filer" />
+                    </label>
+                    {fileErrors.map((message) => (
+                      <p key={message} className="text-[12.5px] text-red-400">
+                        {message}
+                      </p>
+                    ))}
+                    {uploads.length === 0 ? (
+                      <p className="text-[12.5px] text-muted">Ingen filer ennå. Etter at du har lagt til en, kan du be AI-en for eksempel: «Bruk bildet {uploads[0]?.name ?? "hero.jpg"} i toppseksjonen».</p>
+                    ) : (
+                      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+                        {uploads.map((upload) => (
+                          <li key={upload.url} className="flex items-center gap-3 px-3 py-2.5">
+                            {upload.mime.startsWith("image/") ? (
+                              // eslint-disable-next-line @next/next/no-img-element -- a small public picture from storage
+                              <img src={upload.url} alt="" className="size-10 shrink-0 rounded-lg object-cover" />
+                            ) : (
+                              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-surface-2 text-muted">{upload.mime.startsWith("audio/") ? <FileAudio className="size-5" /> : upload.mime === "application/pdf" ? <FileText className="size-5" /> : <ImageIcon className="size-5" />}</span>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-medium">{upload.name}</p>
+                              <p className="text-[12px] text-faint">{upload.bytes >= 1_000_000 ? `${(upload.bytes / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(upload.bytes / 1000))} KB`}</p>
+                            </div>
+                            <button type="button" onClick={() => void navigator.clipboard?.writeText(upload.url)} className="rounded-lg border border-line px-2.5 py-1 text-[12px] text-muted transition hover:border-line-strong hover:text-fg">
+                              Kopier adresse
+                            </button>
+                            <button type="button" onClick={() => void dropFile(upload)} aria-label={`Slett ${upload.name}`} className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-red-500/10 hover:text-red-400">
+                              <Trash2 className="size-4" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </Card>
 
