@@ -122,4 +122,22 @@ const ids = (files: Record<string, string>) => moreSecurityFindings(files).map((
   assert.ok(!keys.includes("Content-Security-Policy"), "a general policy would break payments and analytics");
 }
 
+// --- Supabase edge functions in imported projects
+{
+  const edge = (files: Record<string, string>) => securityFindings(files).filter((f) => f.id.startsWith("edge-")).map((f) => f.id);
+  const cfg = (name: string, v: string) => ({ "/supabase/config.toml": `[functions.${name}]
+verify_jwt = ${v}
+` });
+  const hook = 'const sig = req.headers.get("paddle-signature"); const k = Deno.env.get("PAYMENTS_WEBHOOK_SECRET"); const body = await req.text();';
+  assert.deepEqual(edge({ ...cfg("paddle-webhook", "false"), "/supabase/functions/paddle-webhook/index.ts": hook }), ["edge-unsigned:paddle-webhook"], "a webhook that reads the signature but never verifies it");
+  assert.deepEqual(edge({ ...cfg("paddle-webhook", "false"), "/supabase/functions/paddle-webhook/index.ts": hook + " const e = await paddle.webhooks.unmarshal(body, k, sig);" }), [], "a verified webhook is fine");
+  assert.deepEqual(edge({ ...cfg("stripe-webhook", "false"), "/supabase/functions/stripe-webhook/index.ts": "const e = await stripe.webhooks.constructEventAsync(body, sig, secret);" }), []);
+  assert.deepEqual(edge({ ...cfg("send", "false"), "/supabase/functions/send/index.ts": "Deno.serve(async () => new Response('ok'));" }), ["edge-open:send"], "open and nobody checked");
+  assert.deepEqual(edge({ ...cfg("send", "false"), "/supabase/functions/send/index.ts": 'const u = await supabase.auth.getUser(req.headers.get("Authorization"));' }), [], "an open function that checks the caller");
+  assert.deepEqual(edge({ ...cfg("job", "false"), "/supabase/functions/job/index.ts": 'if (req.headers.get("x-cron") !== Deno.env.get("LOVABLE_CRON_SECRET")) return new Response("no", { status: 401 });' }), [], "a shared secret counts");
+  assert.deepEqual(edge({ "/supabase/functions/send/index.ts": "Deno.serve(async () => new Response('ok'));" }), [], "without verify_jwt = false the platform checks the login");
+  assert.deepEqual(edge({ ...cfg("admin", "true"), "/supabase/functions/admin/index.ts": 'const db = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));' }), ["edge-service-role:admin"]);
+  assert.deepEqual(edge({ "/supabase/functions/_shared/x.ts": "x" }), [], "shared folders are not functions");
+}
+
 console.log("security-pack: all ok");

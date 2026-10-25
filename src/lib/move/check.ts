@@ -101,7 +101,11 @@ function hostingOf(files: FileMap, envNames: string[]): Hosting {
   const node = (text(files, "/.nvmrc").trim().replace(/^v/, "") || pkg.engines?.node || "").slice(0, 40) || null;
   let preset = "Ukjent";
   let output = "dist";
-  if (has("next")) {
+  if (has("@tanstack/react-start") || has("@tanstack/start")) {
+    preset = "TanStack Start";
+    output = "dist";
+    notes.push("TanStack Start har serverdel og bygger ikke til rene filer. Vanlige Pages-innstillinger gir feil ved import. Prosjektet må bygges for Cloudflare Workers (Cloudflare-pluginen for Vite og en wrangler-fil), eller flyttes til en vanlig Vite-app.");
+  } else if (has("next")) {
     preset = "Next.js";
     output = "out";
     notes.push("Next.js lages som rene filer bare med `output: \"export\"` i next.config. Bruker prosjektet serverfunksjoner eller server-rendering, passer det ikke på Cloudflare Pages uten en egen tilpasning.");
@@ -116,6 +120,10 @@ function hostingOf(files: FileMap, envNames: string[]): Hosting {
   } else notes.push("Fant ikke rammeverket. Sjekk byggekommandoen og mappen selv.");
   const build = pkg.scripts?.build ? "npm run build" : "npm run build (mangler i package.json: legg til et build-skript)";
   if (preset.startsWith("Vite") || preset === "Create React App") notes.push("Alle adresser som ikke er filer må åpne forsiden (SPA). Pivolar legger inn `_redirects` med `/*  /index.html  200` når siden rulles ut fra Pivolar. Setter du opp Cloudflare selv, legg filen i `public/`.");
+  const locks = ["/package-lock.json", "/bun.lockb", "/bun.lock", "/yarn.lock", "/pnpm-lock.yaml"].filter((p) => p in files || (p === "/bun.lockb" && "/bun.lockb" in files));
+  if (locks.length > 1) notes.push(`Flere låsefiler (${locks.map((p) => p.slice(1)).join(", ")}). Cloudflare velger pakkebehandler etter hvilken som finnes, og en låsefil som ikke stemmer med package.json stopper installasjonen. Behold én (Lovable bruker ofte bun), og slett de andre.`);
+  if (!node) notes.push("Ingen Node-versjon er satt. Nye Vite-versjoner krever Node 20 eller nyere. Sett miljøvariabelen NODE_VERSION (for eksempel 22) i Cloudflare, eller legg en `.nvmrc` i repoet.");
+  notes.push("En import som feiler skyldes oftest Node-versjon, flere låsefiler, `VITE_`-variabler som mangler under bygging, eller et rammeverk med serverdel. Les første røde linje i byggeloggen i Cloudflare.");
   notes.push("`VITE_`-variabler bakes inn når siden bygges. Sett dem i Cloudflare Pages (Settings, Variables) før bygging, og bygg på nytt når de endres.");
   return { preset, build, output, node, env: envNames, notes };
 }
@@ -237,7 +245,7 @@ export function moveCheck(files: FileMap, options: { omitted?: string[] } = {}):
   const host: Item[] = [
     { id: "host-project", kind: "todo", title: "Rull ut til Cloudflare Pages", detail: "Fra Pivolar: Publiser, velg Cloudflare (krever CLOUDFLARE_API_TOKEN og CLOUDFLARE_ACCOUNT_ID). Eller koble repoet i Cloudflare under Workers & Pages, Create, Pages, Connect to Git." },
     { id: "host-settings", kind: "info", title: `Innstillinger: ${hosting.preset}`, values: [`Byggekommando: ${hosting.build}`, `Utdatamappe: ${hosting.output}`, ...(hosting.node ? [`Node: ${hosting.node}`] : [])] },
-    ...hosting.notes.map((n, i): Item => ({ id: `host-note-${i}`, kind: n.startsWith("Next.js") || n.startsWith("SvelteKit") || n.startsWith("Fant ikke") ? "warn" : "info", title: n })),
+    ...hosting.notes.map((n, i): Item => ({ id: `host-note-${i}`, kind: /^(Next\.js|SvelteKit|TanStack|Fant ikke|Flere låsefiler|Ingen Node)/.test(n) ? "warn" : "info", title: n })),
     { id: "host-domain", kind: "todo", title: "Koble domenet", detail: "Mer, Domene i Pivolar, eller under Custom domains i Cloudflare Pages." },
   ];
   groups.push({ id: "hosting", title: "Cloudflare Pages", items: host });

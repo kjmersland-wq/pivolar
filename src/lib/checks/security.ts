@@ -1,6 +1,7 @@
 import type { FileMap } from "../files.ts";
 import type { Finding } from "./quality.ts";
 import { moreSecurityFindings } from "./security-more.ts";
+import { edgeSecurityFindings } from "./security-edge.ts";
 
 /**
  * Security check: reads the project the way a reviewer would before it goes live. It looks for
@@ -179,6 +180,7 @@ export function securityFindings(files: FileMap): Finding[] {
   }
 
   out.push(...moreSecurityFindings(files));
+  out.push(...edgeSecurityFindings(files));
 
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity]);

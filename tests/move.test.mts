@@ -82,6 +82,18 @@ assert.equal(moveCheck({ "/package.json": "ikke json" }).hosting.preset, "Ukjent
 const big = moveCheck({ "/package.json": "{}", "/src/a.ts": "x".repeat(2_000_000) + "import.meta.env.VITE_LATE" });
 assert.ok(!big.groups.some((g) => g.id === "frontend"));
 
+// Why a Cloudflare import usually fails
+{
+  const tsStart = moveCheck({ "/package.json": JSON.stringify({ scripts: { build: "vite build" }, dependencies: { "@tanstack/react-start": "1" } }) });
+  assert.equal(tsStart.hosting.preset, "TanStack Start");
+  assert.ok(tsStart.groups[0]!.items.some((i) => i.kind === "warn" && i.title.startsWith("TanStack")));
+  const locks = moveCheck({ "/package.json": JSON.stringify({ scripts: { build: "x" }, devDependencies: { vite: "5" } }), "/bun.lockb": "x", "/package-lock.json": "{}" });
+  assert.ok(locks.hosting.notes.some((n) => n.startsWith("Flere låsefiler (package-lock.json, bun.lockb)")));
+  assert.ok(locks.hosting.notes.some((n) => n.startsWith("Ingen Node-versjon")));
+  const pinned = moveCheck({ "/package.json": JSON.stringify({ scripts: { build: "x" }, devDependencies: { vite: "5" } }), "/.nvmrc": "v22", "/bun.lock": "x" });
+  assert.ok(!pinned.hosting.notes.some((n) => n.startsWith("Flere") || n.startsWith("Ingen Node")));
+}
+
 // The panel shows the checklist only for projects with their own package.json
 const panel = readFileSync(new URL("../src/components/ProjectPanel.tsx", import.meta.url), "utf8");
 assert.match(panel, /"\/package\.json" in own/);

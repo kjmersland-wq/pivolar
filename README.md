@@ -332,3 +332,5 @@ Et nettsted med mye video og lyd (for eksempel slow-blues.com) fyller ikke lagri
 ## Flyttesjekk (Lovable og andre Vite + Supabase-prosjekter)
 
 Importerte prosjekter med egen `package.json` får en «Flytting»-seksjon i Mer-panelet. Den leser filene (ingen kjøring, ingen nettverk) og lager en avkrysningsliste: migrasjoner i rekkefølge, tabeller uten radnivå-sikkerhet eller regler, filbøtter, edge-funksjoner, navnene på hemmelighetene de leser (med hvor man får dem), webhook-adresser, Paddle/Stripe-ider, `VITE_`-variabler, gammel Supabase-adresse i koden, Lovable-rester og Cloudflare Pages-innstillinger. Verdier av hemmeligheter vises aldri. Avkrysning lagres i nettleseren per prosjekt. Koden ligger i `src/lib/move/check.ts`, testen i `tests/move.test.mts`.
+
+Kontroll, Sikkerhet leser også Supabase edge-funksjoner under `supabase/functions` (`src/lib/checks/security-edge.ts`): webhooks fra Stripe/Paddle som ikke sjekker signaturen, funksjoner med `verify_jwt = false` som ikke sjekker hvem som kaller, og `service_role` brukt uten å lese brukeren.
