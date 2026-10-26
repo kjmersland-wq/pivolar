@@ -152,7 +152,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId, projectName]);
 
-  const importedOk = Boolean(importInfo?.github && (host === "cloudflare" ? config?.cloudflare : host === "netlify" ? config?.netlify : false));
+  const importedOk = Boolean(importInfo?.github && config?.cloudflare);
   const ready = imported ? importedOk : Boolean(config?.github && (host !== "vercel" || config?.vercel));
   const slug = slugify(name);
   const hostInfo = hostById(host);
@@ -253,17 +253,10 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                 <div className="space-y-3 rounded-xl border border-line bg-surface-2 p-3.5">
                   <p className="text-[13.5px] font-medium">Importert prosjekt</p>
                   <p className="text-[12.5px] leading-relaxed text-muted">
-                    Pivolar henter repoet {importInfo?.github ? <span className="font-mono text-fg">{importInfo.github.owner}/{importInfo.github.repo}</span> : "fra GitHub"} i en isolert maskin, legger endringene dine oppå, bygger og laster opp. Koden røres ikke på GitHub. Bare vanlige Vite-prosjekter i offentlige repoer støttes.
+                    Pivolar legger prosjektet ut på Cloudflare Pages. Det henter repoet {importInfo?.github ? <span className="font-mono text-fg">{importInfo.github.owner}/{importInfo.github.repo}</span> : "fra GitHub"} i en isolert maskin, legger endringene dine oppå, bygger og laster opp. Koden røres ikke på GitHub. Bare vanlige Vite-prosjekter i offentlige repoer støttes.
                   </p>
                   {!importInfo?.github && <p className="text-[12.5px] text-red-400">Dette prosjektet er ikke importert fra GitHub, så byggemaskinen har ikke noe repo å hente.</p>}
                   {importInfo?.github?.private && <p className="text-[12.5px] text-amber-400">Repoet er privat. Gjør det offentlig mens du ruller ut, ellers stopper utrullingen.</p>}
-                  <div className="flex gap-2">
-                    {(["cloudflare", "netlify"] as const).map((id) => (
-                      <button key={id} type="button" disabled={running} onClick={() => setHost(id)} className={cn("flex-1 rounded-lg border px-3 py-2 text-[13px] transition", host === id ? "border-accent bg-accent/10 font-medium" : "border-line text-muted hover:border-line-strong")}>
-                        {hostById(id).name}
-                      </button>
-                    ))}
-                  </div>
                   <div className="space-y-1">
                     <label htmlFor="build-env" className="text-[12.5px] font-medium text-muted">
                       VITE_-variabler til byggingen (en per linje)
@@ -373,7 +366,7 @@ export function PublishDialog({ open, onClose, projectId, projectName, files }: 
                 {running ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
                 {running ? "Publiserer …" : last ? "Publiser på nytt" : "Publiser"}
               </button>
-              <p className={cn("text-center text-[11.5px] text-faint", ready && "hidden")}>{imported ? `Knappen låses opp når repoet er importert fra GitHub og ${hostById(host).name} er satt opp på serveren (${autoKeys}).` : "Knappen låses opp når begge nøklene er lagt inn."}</p>
+              <p className={cn("text-center text-[11.5px] text-faint", ready && "hidden")}>{imported ? `Knappen låses opp når repoet er importert fra GitHub og Cloudflare er satt opp på serveren (CLOUDFLARE_API_TOKEN og CLOUDFLARE_ACCOUNT_ID).` : "Knappen låses opp når begge nøklene er lagt inn."}</p>
             </div>
           </motion.div>
         </motion.div>

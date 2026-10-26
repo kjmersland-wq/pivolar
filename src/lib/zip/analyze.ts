@@ -48,9 +48,11 @@ function parseJson(text: string | undefined): Record<string, unknown> | null {
   }
 }
 
-export function analyze(files: FileMap): Report {
+/** `left` is what the reader did not keep (path and reason). A large lock file is left out, but it still exists in the repository. */
+export function analyze(files: FileMap, left: { path: string }[] = []): Report {
   const paths = Object.keys(files);
   const has = (path: string) => path in files;
+  const lockFiles = ["/pnpm-lock.yaml", "/yarn.lock", "/bun.lock", "/bun.lockb", "/package-lock.json"].filter((name) => has(name) || left.some((l) => l.path === name.slice(1) || l.path === name));
   const pkg = parseJson(files["/package.json"]);
   const deps: Record<string, string> = { ...((pkg?.dependencies as Record<string, string>) ?? {}), ...((pkg?.devDependencies as Record<string, string>) ?? {}) };
   const dep = (name: string) => name in deps;
@@ -74,7 +76,8 @@ export function analyze(files: FileMap): Report {
   else if (paths.some((p) => /(^|\/)index\.html$/.test(p))) framework = { id: "static", label: "Statisk HTML" };
   else if (has("/App.tsx")) framework = { id: "pivolar", label: "Pivolar (React + Tailwind)" };
 
-  const packageManager = has("/pnpm-lock.yaml") ? "pnpm" : has("/yarn.lock") ? "yarn" : has("/bun.lock") || has("/bun.lockb") ? "bun" : has("/package-lock.json") ? "npm" : pkg ? "ukjent (ingen låsefil)" : null;
+  const lock = (name: string) => lockFiles.includes(name);
+  const packageManager = lock("/pnpm-lock.yaml") ? "pnpm" : lock("/yarn.lock") ? "yarn" : lock("/bun.lock") || lock("/bun.lockb") ? "bun" : lock("/package-lock.json") ? "npm" : pkg ? "ukjent (ingen låsefil)" : null;
 
   const services = [...new Set(Object.keys(deps).flatMap((d) => SERVICES.filter(([re]) => re.test(d)).map(([, label]) => label)))];
 
@@ -95,6 +98,7 @@ export function analyze(files: FileMap): Report {
     if (scriptsRaw[hook]) risks.push(`package.json kjører «${hook}» ved installasjon. Installer aldri dette prosjektet utenfor et isolert miljø før du har lest skriptet.`);
   }
   if (pkg && !packageManager?.match(/^(npm|pnpm|yarn|bun)$/)) risks.push("Ingen låsefil: avhengighetene kan få nye versjoner ved neste installasjon.");
+  if (lockFiles.length > 1) risks.push(`Flere låsefiler (${lockFiles.map((n) => n.slice(1)).join(", ")}): behold én. En som ikke stemmer med package.json kan stoppe installasjonen hos en vert.`);
   if (["wordpress", "joomla"].includes(framework.id)) risks.push("CMS-prosjekt: databasen ligger utenfor filene. Pivolar kan foreløpig bare lese og eksportere filene, ikke kjøre eller konvertere dem.");
   if (services.some((s) => /database|Postgres|MongoDB|Supabase|Firebase/i.test(s))) risks.push("Prosjektet bruker en database. Pivolar rører ikke eksisterende data, og tilkoblingsnøkler må settes som miljøvariabler.");
 

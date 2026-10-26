@@ -465,6 +465,7 @@ function Inner({ id, initialMessages, initialEdits, initialName }: { id: string;
         messages={messages}
         edits={edits}
         onKnowledge={(text) => setEdits((prev) => withKnowledge(prev, text))}
+        onPrepare={compose}
         uploads={uploadsOf(files, process.env.NEXT_PUBLIC_SUPABASE_URL)}
         onUploads={(list) => setEdits((prev) => withUploads(prev, list))}
       />

@@ -104,7 +104,13 @@ function hostingOf(files: FileMap, envNames: string[]): Hosting {
   if (has("@tanstack/react-start") || has("@tanstack/start")) {
     preset = "TanStack Start";
     output = "dist";
-    notes.push("TanStack Start har serverdel og bygger ikke til rene filer. Vanlige Pages-innstillinger gir feil ved import. Prosjektet må bygges for Cloudflare Workers (Cloudflare-pluginen for Vite og en wrangler-fil), eller flyttes til en vanlig Vite-app.");
+    const wrangler = ["/wrangler.jsonc", "/wrangler.json", "/wrangler.toml"].some((p) => p in files);
+    if (wrangler && has("@cloudflare/vite-plugin")) {
+      notes.push("Cloudflare Workers: prosjektet er allerede satt opp for Workers (wrangler-fil og Cloudflare-pluginen). Koble repoet i Cloudflare under Workers & Pages, Import a repository. Byggekommando: npm run build. Deploy-kommando: npx wrangler deploy. Sett hemmelighetene under Variables and Secrets, ikke som VITE_.");
+    } else {
+      notes.push("TanStack Start har serverdel og bygger ikke til rene filer, så vanlige Pages-innstillinger gir feil. Det kjører på Cloudflare Workers.");
+      notes.push("Cloudflare Workers, slik gjør du det (sjekk mot TanStack Starts egen veiledning for Cloudflare): legg til pakkene @cloudflare/vite-plugin og wrangler, ta pluginen inn i vite.config, og lag en wrangler.jsonc med name, compatibility_date, compatibility_flags [\"nodejs_compat\"] og main \"@tanstack/react-start/server-entry\". Så Import a repository i Cloudflare, byggekommando npm run build, deploy-kommando npx wrangler deploy.");
+    }
   } else if (has("next")) {
     preset = "Next.js";
     output = "out";

@@ -93,4 +93,16 @@ assert.equal(manifest.validation.ok, false);
 assert.ok(manifest.manualSteps.some((s: string) => s.includes("logo.png")));
 assert.ok(manifest.omitted.some((o: { path: string }) => o.path === ".env"));
 assert.equal(manifest.included.find((f: { path: string }) => f.path === "package.json").bytes, unpacked["package.json"]!.length);
+
+// A large lock file that was left out still exists in the repository
+{
+  const pkg = JSON.stringify({ dependencies: { react: "18", vite: "5" } });
+  const left = analyze({ "/package.json": pkg }, [{ path: "bun.lock" }, { path: "package-lock.json" }]);
+  assert.equal(left.packageManager, "bun");
+  assert.ok(!left.risks.some((r) => /^Ingen låsefil/.test(r)));
+  assert.ok(left.risks.some((r) => /^Flere låsefiler \(bun\.lock, package-lock\.json\)/.test(r)));
+  assert.match(analyze({ "/package.json": pkg }).risks.join(" "), /^Ingen låsefil/);
+  assert.ok(!analyze({ "/package.json": pkg, "/package-lock.json": "{}" }).risks.some((r) => /låsefil/.test(r)));
+}
+
 console.log("zip: all ok");

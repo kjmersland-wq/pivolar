@@ -87,6 +87,7 @@ export function ProjectPanel({
   onKnowledge,
   uploads,
   onUploads,
+  onPrepare,
 }: {
   open: boolean;
   onClose: () => void;
@@ -102,6 +103,8 @@ export function ProjectPanel({
   /** The files the owner has added, and a way to change the list. */
   uploads: Upload[];
   onUploads: (list: Upload[]) => void;
+  /** Writes the files the Cloudflare preparation adds, as the owner's own edits. */
+  onPrepare: (changes: Record<string, string>) => void;
 }) {
   const router = useRouter();
   const scroller = useRef<HTMLDivElement>(null);
@@ -404,7 +407,7 @@ export function ProjectPanel({
 
                 {moving && (
                   <Card id="flytting" title="Flytting" text="Sjekkliste for å flytte et importert prosjekt (for eksempel fra Lovable) til din egen Supabase, egne betalingsnøkler og Cloudflare Pages. Leses fra filene; ingen hemmeligheter vises.">
-                    <MoveCheck projectId={projectId} files={moving} omitted={info?.omittedSecrets ?? []} />
+                    <MoveCheck projectId={projectId} files={moving} onPrepare={onPrepare} omitted={info?.omittedSecrets ?? []} />
                   </Card>
                 )}
 

@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     // What was left out while the archive was read comes first in the list, then what the checks left out.
     const more = thin.droppedCount - thin.dropped.length;
     const skipped = [...thin.dropped, ...(more > 0 ? [{ path: "…", reason: `${more} filer til er utelatt av samme grunner (bilder, lyd, avhengigheter, store datafiler)` }] : []), ...result.skipped];
-    return NextResponse.json({ ...result, skipped, report: analyze(result.files), source });
+    return NextResponse.json({ ...result, skipped, report: analyze(result.files, skipped), source });
   } catch (error) {
     if (error instanceof GitHubImportError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ImportError) return NextResponse.json({ error: error.message }, { status: 400 });

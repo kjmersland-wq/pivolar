@@ -92,8 +92,8 @@ export async function POST(request: Request) {
         };
         send({ step: "github", status: "skipped", message: "Koden ligger allerede på GitHub." });
         send({ step: "vercel", status: "skipped" });
-        if (!isAutoHost(host)) return fail("Importerte prosjekter rulles ut til Cloudflare eller Netlify. Velg en av dem.");
-        if (!autoHosts()[host]) return fail(host === "cloudflare" ? "CLOUDFLARE_API_TOKEN og CLOUDFLARE_ACCOUNT_ID må være satt i miljøvariablene." : "NETLIFY_TOKEN mangler i miljøvariablene.");
+        if (host !== "cloudflare") return fail("Importerte prosjekter rulles bare ut til Cloudflare Pages.");
+        if (!autoHosts()[host]) return fail("CLOUDFLARE_API_TOKEN og CLOUDFLARE_ACCOUNT_ID må være satt i miljøvariablene.");
         const plan = planImported(files);
         if (!plan.ok) return fail(plan.message);
         const repo = body.github;
